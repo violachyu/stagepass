@@ -1,6 +1,8 @@
+
 "use client";
 
 import React from 'react';
+import { useRouter } from 'next/navigation'; // Import useRouter
 import {
   Dialog,
   DialogContent,
@@ -16,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Chrome } from 'lucide-react'; // Using Chrome as a stand-in for Google icon
+import { useToast } from '@/hooks/use-toast'; // Import useToast
 
 
 interface AuthModalProps {
@@ -24,26 +27,79 @@ interface AuthModalProps {
 }
 
 const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onOpenChange }) => {
+  const router = useRouter(); // Initialize router
+  const { toast } = useToast(); // Initialize toast
 
-  const handleGoogleSignIn = () => {
-    // TODO: Implement Google Sign-In logic using Firebase Auth or similar
+  const handleSuccessfulAuth = () => {
+    toast({
+      title: "Success!",
+      description: "You have been logged in.",
+    });
+    onOpenChange(false); // Close modal
+    router.push('/dashboard'); // Redirect to dashboard
+  }
+
+  const handleFailedAuth = (error: any) => {
+     toast({
+      variant: "destructive",
+      title: "Authentication Failed",
+      description: error.message || "An error occurred. Please try again.",
+    });
+    console.error("Authentication error:", error);
+  }
+
+
+  const handleGoogleSignIn = async () => {
     console.log("Attempting Google Sign-In...");
-    // Example: signInWithPopup(auth, googleProvider);
-    onOpenChange(false); // Close modal after attempt (adjust as needed)
+    // TODO: Implement actual Firebase Google Sign-In logic
+    // Example:
+    // try {
+    //   await signInWithPopup(auth, googleProvider);
+    //   handleSuccessfulAuth();
+    // } catch (error) {
+    //   handleFailedAuth(error);
+    // }
+    // For now, simulate success:
+    setTimeout(() => handleSuccessfulAuth(), 500);
   };
 
-  const handleEmailPasswordSignIn = (event: React.FormEvent) => {
+  const handleEmailPasswordSignIn = async (event: React.FormEvent) => {
     event.preventDefault();
-    // TODO: Implement Email/Password Sign-In logic
     console.log("Attempting Email/Password Sign-In...");
-    onOpenChange(false); // Close modal after attempt
+     // TODO: Implement actual Firebase Email/Password Sign-In logic
+    // Example:
+    // const email = (event.target as HTMLFormElement)['signin-email'].value;
+    // const password = (event.target as HTMLFormElement)['signin-password'].value;
+    // try {
+    //   await signInWithEmailAndPassword(auth, email, password);
+    //   handleSuccessfulAuth();
+    // } catch (error) {
+    //    handleFailedAuth(error);
+    // }
+     // For now, simulate success:
+    setTimeout(() => handleSuccessfulAuth(), 500);
   };
 
-    const handleEmailPasswordSignUp = (event: React.FormEvent) => {
+    const handleEmailPasswordSignUp = async (event: React.FormEvent) => {
     event.preventDefault();
-    // TODO: Implement Email/Password Sign-Up logic
     console.log("Attempting Email/Password Sign-Up...");
-    onOpenChange(false); // Close modal after attempt
+    // TODO: Implement actual Firebase Email/Password Sign-Up logic
+    // Example:
+    // const email = (event.target as HTMLFormElement)['signup-email'].value;
+    // const password = (event.target as HTMLFormElement)['signup-password'].value;
+    // const confirmPassword = (event.target as HTMLFormElement)['signup-confirm-password'].value;
+    // if (password !== confirmPassword) {
+    //   handleFailedAuth({ message: "Passwords do not match." });
+    //   return;
+    // }
+    // try {
+    //   await createUserWithEmailAndPassword(auth, email, password);
+    //   handleSuccessfulAuth();
+    // } catch (error) {
+    //    handleFailedAuth(error);
+    // }
+    // For now, simulate success:
+    setTimeout(() => handleSuccessfulAuth(), 500);
   };
 
 
