@@ -11,9 +11,8 @@ export default function DashboardPage() {
   const router = useRouter();
 
   const handleCreate = () => {
-    // TODO: Implement logic for creating a new stage/session
-    console.log("Create button clicked");
-    // Example navigation: router.push('/create-stage');
+    // Navigate to the create stage page
+    router.push('/create-stage');
   };
 
   const handleJoin = () => {
@@ -48,3 +47,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
