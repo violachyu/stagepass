@@ -20,19 +20,21 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Share2, Users, QrCode, Mic, MicOff, X, PanelRightOpen, PanelRightClose, Play, Pause, SkipForward, Loader2, Trash2, AlertTriangle } from 'lucide-react';
+import { Share2, Users, QrCode, Mic, MicOff, X, PanelRightOpen, PanelRightClose, Play, Pause, SkipForward, Loader2, Trash2, AlertTriangle, Music } from 'lucide-react'; // Added Music icon
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
-import { searchYoutubeKaraoke } from '@/actions/youtube'; // Import the server action
+import { searchYoutubeKaraoke } from '@/actions/youtube';
 import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation'; // Import useRouter
+import { useRouter } from 'next/navigation';
+import { AddSongSheet } from '@/components/live-room/add-song-sheet'; // Import the new component
 
 // --- Types ---
 interface Song {
-  id: number;
+  id: number; // Keep internal ID for React keys
   title: string;
-  artist: string;
+  artist?: string; // Make artist optional
   user: string;
+  videoId?: string; // Optional: Store pre-fetched video ID
 }
 
 interface Participant {
@@ -44,19 +46,8 @@ interface Participant {
 
 // --- Placeholder Data ---
 const initialSongQueue: Song[] = [
-  { id: 1, title: 'September', artist:'Earth, Wind & Fire', user: 'Piggy' }, // Added artist for better search
-  // { id: 2, title: 'Hotel California', artist: 'Eagles', user: 'Bob' },
-  // { id: 3, title: 'Like a Rolling Stone', artist: 'Bob Dylan', user: 'Charlie' },
-  // { id: 4, title: 'Billie Jean', artist: 'Michael Jackson', user: 'David' },
-  { id: 5, title: 'Stairway to Heaven', artist: 'Led Zeppelin', user: 'Eve' },
-  // Add more for testing scroll
-  // { id: 6, title: 'Sweet Child o\' Mine', artist: 'Guns N\' Roses', user: 'Frank' },
-  // { id: 7, title: 'Imagine', artist: 'John Lennon', user: 'Grace' },
-  // { id: 8, title: 'Smells Like Teen Spirit', artist: 'Nirvana', user: 'Heidi' },
-  // { id: 9, title: 'Another Brick in the Wall', artist: 'Pink Floyd', user: 'Ivy' },
-  // { id: 10, title: 'Wonderwall', artist: 'Oasis', user: 'Judy' },
-  // { id: 11, title: 'Hey Jude', artist: 'The Beatles', user: 'Kyle' },
-  // { id: 12, title: 'Purple Haze', artist: 'Jimi Hendrix', user: 'Liam' },
+  { id: Date.now() + 1, title: 'September', artist:'Earth, Wind & Fire', user: 'Piggy' },
+  { id: Date.now() + 2, title: 'Stairway to Heaven', artist: 'Led Zeppelin', user: 'Eve' },
 ];
 
 const initialParticipants: Participant[] = [
@@ -73,12 +64,13 @@ export default function LiveRoomPage() {
   const [participants, setParticipants] = useState<Participant[]>(initialParticipants);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isParticipantsSheetOpen, setIsParticipantsSheetOpen] = useState(false);
-  const [isTerminateDialogOpen, setIsTerminateDialogOpen] = useState(false); // State for terminate dialog
+  const [isTerminateDialogOpen, setIsTerminateDialogOpen] = useState(false);
   const [isQueueOpen, setIsQueueOpen] = useState(true);
+  const [isAddSongSheetOpen, setIsAddSongSheetOpen] = useState(false); // State for AddSongSheet
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const asideRef = useRef<HTMLElement>(null);
   const { toast } = useToast();
-  const router = useRouter(); // Initialize router
+  const router = useRouter();
 
   // YouTube Player State
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
@@ -89,82 +81,94 @@ export default function LiveRoomPage() {
 
   // --- Effects ---
   useEffect(() => {
-    // Generate room code only on the client-side after mount
     setRoomCode(Math.random().toString(36).substring(2, 8).toUpperCase());
   }, []);
 
-  // Effect to load the first video when the component mounts or queue changes and no song is selected
   useEffect(() => {
-    if (songQueue.length > 0 && currentSongIndex === -1) {
+    if (songQueue.length > 0 && currentSongIndex === -1 && !currentVideoId) {
        console.log("Queue has songs, starting index at 0");
        setCurrentSongIndex(0);
-    } else if (songQueue.length === 0) {
-        // If queue becomes empty (e.g., last song removed), reset index
-        console.log("Queue is empty, resetting index and video");
+    } else if (songQueue.length === 0 && currentSongIndex !== -1) {
+        console.log("Queue became empty, resetting index and video");
         setCurrentSongIndex(-1);
         setCurrentVideoId(null);
         setIsPlaying(false);
+        setIsLoadingVideo(false); // Ensure loading stops
     }
-  }, [songQueue, currentSongIndex]);
+  }, [songQueue, currentSongIndex, currentVideoId]);
 
 
-  // Effect to load video when currentSongIndex or songQueue changes
   useEffect(() => {
     const loadVideo = async () => {
-      // Check if index is valid for the current queue
       if (currentSongIndex >= 0 && currentSongIndex < songQueue.length) {
         setIsLoadingVideo(true);
         const song = songQueue[currentSongIndex];
-        console.log(`Searching YouTube for: "${song.title}" by ${song.artist || 'Unknown Artist'}`);
-        try {
-            const videoId = await searchYoutubeKaraoke({ title: song.title, artist: song.artist });
-            if (videoId) {
-                setCurrentVideoId(videoId);
-                console.log(`Setting video ID: ${videoId} for song "${song.title}" at index ${currentSongIndex}`);
-                // isPlaying state will be updated by onPlayerStateChange when video starts
-            } else {
-                toast({
-                    variant: "destructive",
-                    title: "Video Not Found",
-                    description: `Could not find a karaoke video for "${song.title}". Skipping song.`,
-                });
-                console.log(`No video found for "${song.title}", skipping.`);
-                // Skip this song: Remove it and keep the index the same (effectively moving to the next song)
-                // This triggers this effect again due to queue change
-                setSongQueue(prevQueue => prevQueue.filter((_, index) => index !== currentSongIndex));
-                // No need to change currentSongIndex here, the filter shifts the next song to this index
-            }
-        } catch (error) {
+        console.log(`Attempting to load song at index ${currentSongIndex}: "${song.title}"`);
+
+        let videoIdToLoad = song.videoId; // Use pre-fetched ID if available
+
+        if (!videoIdToLoad) {
+          console.log(`Searching YouTube for: "${song.title}" by ${song.artist || 'Unknown Artist'}`);
+          try {
+            videoIdToLoad = await searchYoutubeKaraoke({ title: song.title, artist: song.artist });
+          } catch (error) {
              toast({
                 variant: "destructive",
                 title: "Search Error",
                 description: `Error searching for "${song.title}". Skipping song.`,
             });
             console.error("Error during YouTube search:", error);
+            // Skip the song if search fails
             setSongQueue(prevQueue => prevQueue.filter((_, index) => index !== currentSongIndex));
-        } finally {
-             setIsLoadingVideo(false);
+            setIsLoadingVideo(false);
+            return; // Exit effect early
+          }
+        } else {
+            console.log(`Using pre-fetched videoId: ${videoIdToLoad}`);
         }
 
-      } else if (songQueue.length > 0 && currentSongIndex >= songQueue.length) {
-        // Index is past the end of the queue
-        console.log("Reached end of queue (index >= length).");
-        setCurrentVideoId(null);
-        setIsPlaying(false);
-        // Don't reset index here, keep it past the end to signify completion
-        toast({ title: "Queue Finished", description: "No more songs in the queue." });
-      } else if (songQueue.length === 0) {
-        // Queue is empty
-        console.log("Queue is empty. No video to load.");
-        setCurrentVideoId(null);
-        setIsPlaying(false);
-        setCurrentSongIndex(-1); // Reset index when queue is truly empty
+
+        if (videoIdToLoad) {
+            // Only update if the video ID is different from the current one
+            if (currentVideoId !== videoIdToLoad) {
+                 setCurrentVideoId(videoIdToLoad);
+                 console.log(`Setting video ID: ${videoIdToLoad} for song "${song.title}"`);
+            } else {
+                 // If the ID is the same, maybe it was paused and needs resuming?
+                 // Or maybe the component re-rendered unnecessarily.
+                 // For now, just ensure loading is false if the ID is already set.
+                 setIsLoadingVideo(false);
+                 // If player exists and isn't playing, maybe play it?
+                 // if(player && player.getPlayerState() !== YouTube.PlayerState.PLAYING) {
+                 //    player.playVideo();
+                 // }
+            }
+        } else {
+            toast({
+                variant: "destructive",
+                title: "Video Not Found",
+                description: `Could not find a karaoke video for "${song.title}". Skipping song.`,
+            });
+            console.log(`No video found for "${song.title}", skipping.`);
+            // Skip this song
+            setSongQueue(prevQueue => prevQueue.filter((_, index) => index !== currentSongIndex));
+            setIsLoadingVideo(false); // Ensure loading stops
+        }
+      } else if (currentSongIndex === -1 && songQueue.length === 0) {
+         // Queue is empty and index is reset, clear video
+         if (currentVideoId) {
+            console.log("Queue empty, clearing video ID.");
+            setCurrentVideoId(null);
+            setIsPlaying(false);
+            setIsLoadingVideo(false);
+         }
       }
+       // No explicit finally block needed here as setIsLoading(false) is handled in success/error paths or state change handlers
     };
 
     loadVideo();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSongIndex, songQueue]); // Dependency array: Re-run when index or queue reference changes
+  }, [currentSongIndex, songQueue]); // Rerun when index or the queue array *reference* changes
 
 
   // --- Callbacks ---
@@ -182,82 +186,72 @@ export default function LiveRoomPage() {
 
   const handleTerminateRoom = () => {
     console.log("Terminating room...");
-    // TODO: Add actual room termination logic (API call, etc.)
-
-    // Close the dialog
     setIsTerminateDialogOpen(false);
-
-    // Show confirmation toast
-    toast({
-        title: "Room Terminated",
-        description: "The live room has been closed.",
-    });
-
-    // Redirect to dashboard
+    toast({ title: "Room Terminated", description: "The live room has been closed." });
     router.push('/dashboard');
   };
 
-  const playNextSong = useCallback(() => {
-    console.log("Attempting to play next song...");
-    // Remove the *current* song (which just finished or was skipped)
-    setSongQueue(prevQueue => {
-        const newQueue = prevQueue.filter((_, index) => index !== currentSongIndex);
-        console.log(`Removed song at index ${currentSongIndex}. New queue length: ${newQueue.length}`);
-        // The useEffect hook watching `songQueue` and `currentSongIndex` will handle loading the video
-        // at the *new* `currentSongIndex` (which remains the same number, but points to the next song
-        // in the filtered list).
-        return newQueue;
+  // Callback function for adding a song from the sheet
+  const handleAddSong = (newSong: { title: string; artist?: string; videoId?: string }) => {
+     const songToAdd: Song = {
+      ...newSong,
+      id: Date.now(), // Simple unique ID using timestamp
+      user: 'You', // Placeholder, replace with actual user later
+    };
+    setSongQueue(prevQueue => [...prevQueue, songToAdd]);
+    toast({
+      title: "Song Added",
+      description: `"${songToAdd.title}" has been added to the queue.`,
     });
-    // We don't increment currentSongIndex here. The removal shifts the queue.
- }, [currentSongIndex]);
-
+    console.log("Added song:", songToAdd);
+  };
 
   // --- YouTube Player Event Handlers ---
   const onPlayerReady: YouTubeProps['onReady'] = (event) => {
     console.log("Player ready");
     setPlayer(event.target);
-    // Autoplay is handled by opts.playerVars.autoplay and changing videoId
+    // Autoplay should handle playing when videoId changes and playerVars.autoplay=1
   };
 
   const onPlayerStateChange: YouTubeProps['onStateChange'] = (event) => {
     const state = event.data;
-     console.log("Player state changed:", state, `(Current Index: ${currentSongIndex}, Queue Length: ${songQueue.length})`);
-    // State constants: -1 (unstarted), 0 (ended), 1 (playing), 2 (paused), 3 (buffering), 5 (video cued)
+    console.log("Player state changed:", state, `(Current Index: ${currentSongIndex}, Queue Length: ${songQueue.length})`);
     if (state === YouTube.PlayerState.ENDED) {
       console.log(`Video ended for song at index ${currentSongIndex}. Removing from queue.`);
       setIsPlaying(false);
-      // Remove the current song from the queue.
-      // The useEffect hook will then load the song at the *same index* (if one exists)
+      setIsLoadingVideo(false); // Ensure loading is off
       setSongQueue(prevQueue => {
           const songToRemove = prevQueue[currentSongIndex];
           if (songToRemove) {
             console.log(`Removing ended song: "${songToRemove.title}"`);
           }
-          // Filter out the song at the current index
-          return prevQueue.filter((_, index) => index !== currentSongIndex);
+          const newQueue = prevQueue.filter((_, index) => index !== currentSongIndex);
+          console.log(`New queue length after removal: ${newQueue.length}`);
+          // The useEffect hook watching `songQueue` and `currentSongIndex` will handle loading
+          // the *next* song, because the removal shifts the next song to the current index.
+          return newQueue;
       });
-      // NOTE: We DON'T change currentSongIndex here. The removal shifts the next song
-      // into the currentSongIndex position, triggering the useEffect to load it.
+      // We don't change currentSongIndex here. The queue shift handles it.
 
     } else if (state === YouTube.PlayerState.PLAYING) {
         console.log("Player state: PLAYING");
         setIsPlaying(true);
-        setIsLoadingVideo(false); // Ensure loading is off when playing starts
+        setIsLoadingVideo(false);
     } else if (state === YouTube.PlayerState.PAUSED) {
         console.log("Player state: PAUSED");
         setIsPlaying(false);
+        setIsLoadingVideo(false); // Ensure loading is off if paused during initial load
     } else if (state === YouTube.PlayerState.BUFFERING) {
         console.log("Player state: BUFFERING");
-        setIsLoadingVideo(true); // Show loader during buffering
+        setIsLoadingVideo(true);
     } else if (state === YouTube.PlayerState.CUED) {
        console.log("Player state: CUED");
-       // Video is ready, playerVars.autoplay should handle playing it
-       // We might briefly set loading to true until PLAYING state is hit.
-       setIsLoadingVideo(true);
+       setIsLoadingVideo(true); // Assume loading until PLAYING starts
+       // Player should auto-play if opts.playerVars.autoplay is 1
+       // event.target.playVideo(); // Avoid manually calling play here if autoplay is set
     } else if (state === YouTube.PlayerState.UNSTARTED) {
         console.log("Player state: UNSTARTED");
-        // Often happens briefly when a new video loads
-        setIsLoadingVideo(true);
+        setIsLoadingVideo(true); // Loading until cued/playing
     }
   };
 
@@ -271,57 +265,56 @@ export default function LiveRoomPage() {
     });
      setIsPlaying(false);
      setIsLoadingVideo(false);
-     // Remove the problematic song from the queue
+     // Remove the problematic song and let useEffect handle the next one
      setSongQueue(prevQueue => prevQueue.filter((_, index) => index !== currentSongIndex));
-     // Effect will handle loading next song
  };
 
 
   const opts: YouTubeProps['opts'] = {
-    height: '100%', // Fill container
-    width: '100%', // Fill container
+    // height: '100%', // Let aspect ratio control height
+    // width: '100%',
     playerVars: {
-      // https://developers.google.com/youtube/player_parameters
-      autoplay: 1, // Autoplay when loaded (controlled by currentVideoId change)
-      controls: 1, // Show default YouTube controls
-      modestbranding: 1, // Reduce YouTube logo
-      rel: 0, // Don't show related videos at the end
-      fs: 0, // Disable fullscreen button (optional)
+      autoplay: 1,
+      controls: 1,
+      modestbranding: 1,
+      rel: 0,
+      fs: 1, // Allow fullscreen
     },
   };
 
   // --- Control Handlers ---
   const handlePlayPause = () => {
     if (!player) return;
-    if (isPlaying) {
+    const currentState = player.getPlayerState();
+    if (currentState === YouTube.PlayerState.PLAYING) {
         player.pauseVideo();
         console.log("User paused video");
+        setIsPlaying(false); // Manually set state as event might lag
     } else {
-        // If there's a video loaded (or cued), play it
-        if (currentVideoId && player.getPlayerState() !== YouTube.PlayerState.PLAYING) {
+        // If video exists (even if paused, ended, cued), play it
+        if (currentVideoId && currentState !== YouTube.PlayerState.PLAYING) {
              player.playVideo();
              console.log("User played video");
+             setIsPlaying(true); // Manually set state
         } else if (songQueue.length > 0 && currentSongIndex === -1) {
-             // If paused at the very beginning before any song played, start the first song
+             // Start queue from beginning if nothing loaded yet
              console.log("User started queue from beginning");
-             setCurrentSongIndex(0); // This will trigger the useEffect to load the video
+             setCurrentSongIndex(0); // Trigger useEffect
         }
     }
-    // Actual state change (isPlaying) is handled by onPlayerStateChange
   };
 
  const handleSkip = () => {
-    if (isLoadingVideo || currentSongIndex < 0) return; // Don't skip if loading or nothing is playing/cued
+    if (isLoadingVideo || currentSongIndex < 0 || currentSongIndex >= songQueue.length) return;
 
     console.log(`User skipped song at index ${currentSongIndex}`);
     if (player) {
-        // Stop current video immediately to prevent sound overlap
-        player.stopVideo();
+        player.stopVideo(); // Stop immediately
     }
-    setIsPlaying(false); // Ensure state reflects stopping
+    setIsPlaying(false);
     setIsLoadingVideo(false); // Ensure loading is off
 
-     // Remove the *current* song from the queue
+     // Remove the current song, useEffect will handle the next load
      setSongQueue(prevQueue => {
         const songToSkip = prevQueue[currentSongIndex];
         if (songToSkip) {
@@ -329,11 +322,10 @@ export default function LiveRoomPage() {
         }
         return prevQueue.filter((_, index) => index !== currentSongIndex);
     });
-    // Effect will handle loading the next song at the same index
  };
 
-  // Function to get the currently playing song details
   const getCurrentSong = (): Song | null => {
+      // Check index validity against the *current* queue length
       if (currentSongIndex >= 0 && currentSongIndex < songQueue.length) {
           return songQueue[currentSongIndex];
       }
@@ -345,18 +337,17 @@ export default function LiveRoomPage() {
   // --- JSX ---
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
-      {/* Main Content Area (Video) */}
-      <main className="flex-1 flex flex-col p-4 md:p-6 transition-all duration-300 ease-in-out">
-        <header className="flex justify-between items-center mb-4">
-          {/* Current Song Display */}
-          <div className="flex-1 min-w-0 mr-4">
+      {/* Main Content Area */}
+      <main className="flex-1 flex flex-col p-4 md:p-6 overflow-hidden"> {/* Ensure main area can handle overflow if needed */}
+        <header className="flex justify-between items-center mb-4 flex-shrink-0">
+           <div className="flex-1 min-w-0 mr-4">
               {currentSong && !isLoadingVideo ? (
                 <>
                     <h1 className="text-lg md:text-xl font-bold text-primary truncate" title={currentSong.title}>
                         Now Playing: {currentSong.title}
                     </h1>
                     <p className="text-sm text-muted-foreground truncate">
-                        {currentSong.artist} (Added by {currentSong.user})
+                        {currentSong.artist || 'Unknown Artist'} (Added by {currentSong.user})
                     </p>
                 </>
               ) : isLoadingVideo ? (
@@ -423,9 +414,7 @@ export default function LiveRoomPage() {
                   </div>
                   <div className="flex flex-col items-center space-y-2">
                      <span className="text-sm text-muted-foreground">Scan QR Code</span>
-                     {/* Placeholder for QR Code */}
                      <div className="p-2 border rounded-md bg-white" data-ai-hint="qrcode example placeholder">
-                        {/* Replace with actual QR code component or image */}
                        <svg width="96" height="96" viewBox="0 0 33 33" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path fillRule="evenodd" clipRule="evenodd" d="M18 0H0V18H18V0ZM14 4H4V14H14V4Z" fill="black"/>
                         <path fillRule="evenodd" clipRule="evenodd" d="M8 6H6V8H8V6Z" fill="black"/>
@@ -469,7 +458,6 @@ export default function LiveRoomPage() {
                       <li key={p.id} className="flex items-center justify-between p-2 rounded hover:bg-accent">
                         <div className="flex items-center space-x-3">
                           <Avatar className="h-8 w-8">
-                            {/* Using picsum for placeholder images */}
                             <AvatarImage src={`https://picsum.photos/seed/${p.id}/32/32`} alt={p.name} data-ai-hint="person face random"/>
                             <AvatarFallback>{p.name.charAt(0)}</AvatarFallback>
                           </Avatar>
@@ -492,7 +480,7 @@ export default function LiveRoomPage() {
                   </ul>
                 </ScrollArea>
                  <SheetFooter className="mt-auto p-4 border-t border-border">
-                   {/* Optional: Add an "Invite More" button or similar */}
+                    {/* Footer content if needed */}
                  </SheetFooter>
               </SheetContent>
             </Sheet>
@@ -504,42 +492,47 @@ export default function LiveRoomPage() {
           </div>
         </header>
 
-        {/* Video Player Area */}
-        <div className="flex-1 bg-black rounded-lg flex items-center justify-center overflow-hidden shadow-inner relative aspect-video max-h-[calc(100vh-150px)]">
-          {(isLoadingVideo || (currentVideoId && !isPlaying && player?.getPlayerState() !== YouTube.PlayerState.PAUSED && player?.getPlayerState() !== YouTube.PlayerState.ENDED)) && ( // Show loader if explicitly loading OR if video exists but isn't playing/paused/ended yet
-             <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-10">
+        {/* Video Player Area - Using aspect-video to maintain ratio */}
+        <div className="flex-1 bg-black rounded-lg overflow-hidden shadow-inner relative w-full max-w-full mx-auto aspect-video flex items-center justify-center">
+           {/* Loading Indicator */}
+           {isLoadingVideo && (
+             <div className="absolute inset-0 flex items-center justify-center bg-black/60 z-10">
                 <Loader2 className="h-12 w-12 text-primary animate-spin" />
              </div>
-          )}
-          {currentVideoId ? (
-           <YouTube
-              key={currentVideoId} // Force re-render when videoId changes
-              videoId={currentVideoId}
-              opts={opts}
-              onReady={onPlayerReady}
-              onStateChange={onPlayerStateChange}
-              onError={onPlayerError}
-              className="absolute top-0 left-0 w-full h-full" // Ensure YouTube fills the container
-              iframeClassName="absolute top-0 left-0 w-full h-full border-0" // Added border-0
-            />
-          ) : (
+           )}
+
+           {/* YouTube Component */}
+           {currentVideoId ? (
+            <YouTube
+                key={currentVideoId} // Force re-render on ID change
+                videoId={currentVideoId}
+                opts={opts}
+                onReady={onPlayerReady}
+                onStateChange={onPlayerStateChange}
+                onError={onPlayerError}
+                className="absolute top-0 left-0 w-full h-full" // Fill container
+                iframeClassName="absolute top-0 left-0 w-full h-full border-0"
+             />
+           ) : (
+             // Placeholder when no video is loaded/playing and not loading
              !isLoadingVideo && (
                 <div className="text-center text-muted-foreground p-8">
+                    <Music className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
                     <p className="text-lg mb-2">{songQueue.length > 0 ? "Queue finished!" : "The stage is quiet..."}</p>
                     <p className="text-sm">Add some songs to get the party started!</p>
-                    {/* TODO: Maybe add a button here to trigger the "Add Song" functionality */}
+                    <Button onClick={() => setIsAddSongSheetOpen(true)} className="mt-4">Add Song</Button>
                 </div>
              )
-          )}
+           )}
         </div>
 
          {/* Playback Controls */}
-         <div className="flex justify-center items-center space-x-4 mt-4">
+         <div className="flex justify-center items-center space-x-4 mt-4 flex-shrink-0">
              <Button
                 variant="ghost"
                 size="icon"
                 onClick={handlePlayPause}
-                disabled={isLoadingVideo || (!currentVideoId && songQueue.length === 0)} // Disable if loading or no video & empty queue
+                disabled={isLoadingVideo || (!currentVideoId && songQueue.length === 0)}
                 aria-label={isPlaying ? "Pause" : "Play"}
                 className="w-12 h-12 rounded-full"
             >
@@ -549,7 +542,7 @@ export default function LiveRoomPage() {
                 variant="ghost"
                 size="icon"
                 onClick={handleSkip}
-                disabled={isLoadingVideo || !currentVideoId || currentSongIndex < 0} // Disable if loading, no video loaded, or index is invalid
+                disabled={isLoadingVideo || !currentVideoId || currentSongIndex < 0 || currentSongIndex >= songQueue.length } // Also disable if index is out of bounds
                 aria-label="Skip Next"
                  className="w-12 h-12 rounded-full"
             >
@@ -562,58 +555,65 @@ export default function LiveRoomPage() {
       <aside
         ref={asideRef}
         className={cn(
-          "border-l border-border flex flex-col h-full transition-all duration-300 ease-in-out",
+          "border-l border-border flex flex-col h-full transition-all duration-300 ease-in-out bg-card", // Added bg-card
           isQueueOpen ? "w-64 md:w-80 opacity-100" : "w-0 opacity-0 pointer-events-none -mr-1"
         )}
         aria-hidden={!isQueueOpen}
       >
         <div className={cn("flex flex-col flex-1 overflow-hidden", isQueueOpen ? "opacity-100" : "opacity-0")}>
-          <Card className="flex flex-col flex-1 border-0 rounded-none shadow-none bg-card">
-            <CardHeader className="border-b border-border flex flex-row justify-between items-center p-4">
+            <CardHeader className="border-b border-border flex flex-row justify-between items-center p-4 flex-shrink-0">
               <CardTitle className="text-lg">Song Queue ({songQueue.length})</CardTitle>
             </CardHeader>
-            <CardContent className="p-0 flex-1">
-              <ScrollArea className="h-full">
-                {songQueue.length === 0 && (
+            <CardContent className="p-0 flex-1 overflow-hidden"> {/* Allow CardContent to overflow */}
+              <ScrollArea className="h-full"> {/* ScrollArea takes full height of parent */}
+                {songQueue.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center p-6">The queue is empty. Add a song!</p>
+                ) : (
+                    <ul className="p-2 space-y-2">
+                    {songQueue.map((song, index) => (
+                        <li
+                            key={song.id}
+                            className={cn(
+                                "flex items-center p-3 rounded-md bg-card border border-transparent shadow-sm transition-colors duration-150",
+                                index === currentSongIndex && "ring-2 ring-primary bg-primary/10 border-primary/30", // Highlight current song
+                                index > currentSongIndex && "hover:bg-accent/80" // Hover effect only for upcoming
+                            )}
+                            title={`${song.title} - ${song.artist || 'Unknown'} (Added by ${song.user})`}
+                        >
+                        {/* Use Play icon for current, number for upcoming */}
+                        <span className={cn(
+                            "text-lg font-semibold mr-3 text-muted-foreground w-8 text-center flex-shrink-0",
+                             index === currentSongIndex && "text-primary font-bold"
+                            )}>
+                            {index === currentSongIndex ? <Play className="h-5 w-5 inline-block text-primary animate-pulse" /> : `#${index + 1}`}
+                        </span>
+                        <div className="flex-1 overflow-hidden">
+                            <p className={cn("text-sm font-medium truncate", index === currentSongIndex && "font-bold")}>{song.title}</p>
+                            <p className="text-xs text-muted-foreground truncate">{song.artist || "Unknown Artist"}</p>
+                            <p className="text-xs text-muted-foreground/80 truncate">Added by {song.user}</p>
+                        </div>
+                        {/* Optional Remove Button (consider permissions) */}
+                        {/* <Button variant="ghost" size="icon" className="ml-2 h-6 w-6 text-muted-foreground hover:text-destructive"> <X className="h-4 w-4" /> </Button> */}
+                        </li>
+                    ))}
+                    </ul>
                 )}
-                <ul className="p-2 space-y-2">
-                  {songQueue.map((song, index) => (
-                    <li
-                        key={song.id} // Use song ID for stable key
-                        className={cn(
-                            "flex items-center p-3 rounded-md bg-card border border-border shadow-sm hover:bg-accent/80 transition-colors duration-150",
-                            index === 0 && "ring-2 ring-primary bg-primary/10" // Highlight *next up* song (always index 0 after removal)
-                        )}
-                         title={`${song.title} - ${song.artist} (Added by ${song.user})`}
-                    >
-                      <span className={cn(
-                          "text-lg font-semibold mr-3 text-muted-foreground w-8 text-center flex-shrink-0",
-                          index === 0 && "text-primary font-bold" // Style the number/icon of the next song
-                          )}>
-                        {index === 0 ? <Play className="h-5 w-5 inline-block" /> : `#${index + 1}`}
-                      </span>
-                      <div className="flex-1 overflow-hidden">
-                        <p className={cn("text-sm font-medium truncate", index === 0 && "font-bold")}>{song.title}</p>
-                        <p className="text-xs text-muted-foreground truncate">{song.artist || "Unknown Artist"}</p>
-                        <p className="text-xs text-muted-foreground/80 truncate">Added by {song.user}</p>
-                      </div>
-                      {/* Optional: Add a remove button here */}
-                      {/* <Button variant="ghost" size="icon" className="ml-2 h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => handleRemoveSong(song.id)}> <X className="h-4 w-4" /> </Button> */}
-                    </li>
-                  ))}
-
-                </ul>
               </ScrollArea>
             </CardContent>
-            <div className="p-4 border-t border-border mt-auto">
-                <Button className="w-full">Add Song</Button> {/* TODO: Implement Add Song */}
+            <div className="p-4 border-t border-border mt-auto flex-shrink-0">
+                <Button className="w-full" onClick={() => setIsAddSongSheetOpen(true)}>
+                   <Music className="mr-2 h-4 w-4" /> Add Song
+                </Button>
             </div>
-          </Card>
         </div>
       </aside>
+
+       {/* Add Song Sheet */}
+      <AddSongSheet
+        isOpen={isAddSongSheetOpen}
+        onOpenChange={setIsAddSongSheetOpen}
+        onSongAdded={handleAddSong}
+      />
     </div>
   );
 }
-
-    
