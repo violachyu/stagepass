@@ -227,7 +227,7 @@ export default function LiveRoomPage() {
           console.log("Clicked current song or video is loading, doing nothing.");
           return; // Do nothing if clicking the current song or loading
       }
-       if (clickedIndex <= 0 || clickedIndex >= songQueue.length) { // Check if valid index to move
+       if (clickedIndex < 0 || clickedIndex >= songQueue.length) { // Check if valid index
            console.error("Invalid clicked index for Play Next:", clickedIndex);
            return;
        }
@@ -539,26 +539,17 @@ export default function LiveRoomPage() {
                   </div>
                   <div className="flex flex-col items-center space-y-2">
                      <span className="text-sm text-muted-foreground">Scan QR Code</span>
-                     <div className="p-2 border rounded-md bg-white" data-ai-hint="qrcode example placeholder">
-                       {/* Placeholder QR Code SVG */}
-                       <svg width="96" height="96" viewBox="0 0 33 33" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path fillRule="evenodd" clipRule="evenodd" d="M18 0H0V18H18V0ZM14 4H4V14H14V4Z" fill="black"/>
-                        <path fillRule="evenodd" clipRule="evenodd" d="M8 6H6V8H8V6Z" fill="black"/>
-                        <path fillRule="evenodd" clipRule="evenodd" d="M10 10H12V12H10V10Z" fill="black"/>
-                        <path fillRule="evenodd" clipRule="evenodd" d="M0 32H18V26H16V28H14V30H12V28H10V26H8V24H6V26H4V28H2V22H0V32Z" fill="black"/>
-                        <path fillRule="evenodd" clipRule="evenodd" d="M32 0H22V2H24V4H26V6H28V8H26V10H24V12H22V14H24V16H26V18H28V16H30V14H32V12H30V10H28V12H26V10H28V8H30V6H32V0Z" fill="black"/>
-                        <path fillRule="evenodd" clipRule="evenodd" d="M22 32H32V22H30V24H28V26H30V28H28V30H26V28H24V26H22V32Z" fill="black"/>
-                        <path fillRule="evenodd" clipRule="evenodd" d="M10 18H12V20H10V18Z" fill="black"/>
-                        <path fillRule="evenodd" clipRule="evenodd" d="M14 18H16V20H14V18Z" fill="black"/>
-                        <path fillRule="evenodd" clipRule="evenodd" d="M18 10H20V12H18V10Z" fill="black"/>
-                        <path fillRule="evenodd" clipRule="evenodd" d="M18 14H20V16H18V14Z" fill="black"/>
-                        <path fillRule="evenodd" clipRule="evenodd" d="M22 18H24V20H22V18Z" fill="black"/>
-                        <path fillRule="evenodd" clipRule="evenodd" d="M26 18H28V20H26V18Z" fill="black"/>
-                        <path fillRule="evenodd" clipRule="evenodd" d="M30 18H32V20H30V18Z" fill="black"/>
-                        <path fillRule="evenodd" clipRule="evenodd" d="M18 22H20V24H18V22Z" fill="black"/>
-                        <path fillRule="evenodd" clipRule="evenodd" d="M22 26H24V28H22V26Z" fill="black"/>
-                        <path fillRule="evenodd" clipRule="evenodd" d="M20 30H22V32H20V30Z" fill="black"/>
-                        </svg>
+                     <div className="p-2 border rounded-md bg-white" data-ai-hint="qrcode">
+                       {roomCode ? (
+                         <img
+                           src={`https://api.qrserver.com/v1/create-qr-code/?size=96x96&data=${encodeURIComponent(roomCode)}`}
+                           alt={`QR Code for Room ${roomCode}`}
+                           width="96"
+                           height="96"
+                         />
+                       ) : (
+                         <Skeleton className="h-24 w-24" />
+                       )}
                      </div>
                   </div>
                 </div>
@@ -748,7 +739,7 @@ export default function LiveRoomPage() {
                             {/* Song Info */}
                             <div
                                 className="flex-1 overflow-hidden cursor-pointer"
-                                onClick={index > currentSongIndex ? () => handlePlaySongNext(index) : undefined} // Play immediately on click if upcoming
+                                onClick={index !== currentSongIndex ? () => handlePlaySongNext(index) : undefined} // Play immediately on click if NOT current song
                                 >
                                 <p className={cn(
                                     "text-sm font-medium truncate text-foreground",
