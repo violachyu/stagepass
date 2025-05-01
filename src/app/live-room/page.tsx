@@ -44,7 +44,7 @@ interface Participant {
 
 // --- Placeholder Data ---
 const initialSongQueue: Song[] = [
-  // { id: 1, title: 'Bohemian Rhapsody', artist: 'Queen', user: 'Alice' },
+  { id: 1, title: 'September', artist:'', user: 'Piggy' },
   // { id: 2, title: 'Hotel California', artist: 'Eagles', user: 'Bob' },
   // { id: 3, title: 'Like a Rolling Stone', artist: 'Bob Dylan', user: 'Charlie' },
   // { id: 4, title: 'Billie Jean', artist: 'Michael Jackson', user: 'David' },
