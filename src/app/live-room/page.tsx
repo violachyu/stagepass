@@ -20,7 +20,7 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Share2, Users, QrCode, Mic, MicOff, X, PanelRightOpen, PanelRightClose, Play, Pause, SkipForward, Loader2, Trash2, AlertTriangle, Music } from 'lucide-react'; // Added Music icon
+import { Share2, Users, QrCode, Mic, MicOff, X, PanelRightOpen, PanelRightClose, Play, Pause, SkipForward, Loader2, Trash2, AlertTriangle, Music, ArrowUp, GripVertical } from 'lucide-react'; // Added Music, ArrowUp, GripVertical icons
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { searchYoutubeKaraoke } from '@/actions/youtube';
@@ -81,7 +81,9 @@ export default function LiveRoomPage() {
 
   // --- Effects ---
   useEffect(() => {
-    setRoomCode(Math.random().toString(36).substring(2, 8).toUpperCase());
+    // Generate a 6-digit numeric code
+    const generateRoomCode = () => Math.floor(100000 + Math.random() * 900000).toString();
+    setRoomCode(generateRoomCode());
   }, []);
 
   useEffect(() => {
@@ -95,9 +97,14 @@ export default function LiveRoomPage() {
         setIsPlaying(false);
         setIsLoadingVideo(false); // Ensure loading stops
     } else if (songQueue.length > 0 && currentSongIndex >= songQueue.length) {
-        // Index became invalid after queue modification (e.g., song removal), reset to start
-        console.log("Current index out of bounds, resetting to 0");
-        setCurrentSongIndex(0);
+        // Index became invalid after queue modification (e.g., song removal), reset to start if needed
+        // If the current song was removed, the useEffect watching songQueue might handle it.
+        // If another song was removed causing the index shift, reset to 0.
+        console.log("Current index out of bounds, resetting to 0 or letting queue change handle it.");
+        // Reset to 0 only if the queue still has items. The other effect handles empty queue.
+        if(songQueue.length > 0) {
+          setCurrentSongIndex(0);
+        }
     }
     // No change if currentSongIndex is valid and >= 0
   }, [songQueue, currentSongIndex, currentVideoId]);
@@ -130,8 +137,7 @@ export default function LiveRoomPage() {
             });
             console.error("Error during YouTube search:", error);
             // Skip the song if search fails by removing it
-             setSongQueue(prevQueue => prevQueue.filter((_, index) => index !== currentSongIndex));
-             // Don't change currentSongIndex here, the queue shift or useEffect re-run will handle it.
+             handleRemoveSong(currentSongIndex); // Use the remove function
             setIsLoadingVideo(false);
             return; // Exit effect early
           }
@@ -161,8 +167,7 @@ export default function LiveRoomPage() {
             });
             console.log(`No video found for "${song.title}", skipping.`);
             // Skip this song by removing it
-             setSongQueue(prevQueue => prevQueue.filter((_, index) => index !== currentSongIndex));
-             // Don't change currentSongIndex here, the queue shift or useEffect re-run will handle it.
+             handleRemoveSong(currentSongIndex); // Use the remove function
             setIsLoadingVideo(false); // Ensure loading stops
         }
       } else if (currentSongIndex === -1 && songQueue.length === 0) {
@@ -216,36 +221,151 @@ export default function LiveRoomPage() {
     console.log("Added song:", songToAdd);
   };
 
-   // Callback to handle clicking a song in the queue
-  const handleQueueItemClick = (clickedIndex: number) => {
+   // Callback to handle clicking a song in the queue (Plays Immediately)
+   const handlePlaySongNext = (clickedIndex: number) => {
       if (clickedIndex === currentSongIndex || isLoadingVideo) {
           console.log("Clicked current song or video is loading, doing nothing.");
           return; // Do nothing if clicking the current song or loading
       }
-       if (clickedIndex < 0 || clickedIndex >= songQueue.length) {
-           console.error("Invalid clicked index:", clickedIndex);
+       if (clickedIndex <= 0 || clickedIndex >= songQueue.length) { // Check if valid index to move
+           console.error("Invalid clicked index for Play Next:", clickedIndex);
            return;
        }
 
-       console.log(`Clicked song at index ${clickedIndex}. Moving to front.`);
-       const songToMove = songQueue[clickedIndex];
-       const remainingSongs = songQueue.filter((_, index) => index !== clickedIndex);
-       const newQueue = [songToMove, ...remainingSongs];
+       console.log(`Clicked Play Next for song at index ${clickedIndex}. Moving to front.`);
+       const songToPlay = songQueue[clickedIndex];
+       // Filter out the song and insert it at the beginning
+       const newQueue = [
+           songToPlay,
+           ...songQueue.filter((_, index) => index !== clickedIndex)
+       ];
 
        setSongQueue(newQueue);
        setCurrentSongIndex(0); // Set index to 0 to play the moved song next
+
         // Stop current video immediately if one is playing
-       if (player && isPlaying) {
+       if (player && (isPlaying || player.getPlayerState() === YouTube.PlayerState.PAUSED)) {
           player.stopVideo();
           setIsPlaying(false); // Update state manually
        }
        setCurrentVideoId(null); // Force re-evaluation in useEffect
        setIsLoadingVideo(true); // Indicate loading starts
        toast({
-           title: "Next Up!",
-           description: `Playing "${songToMove.title}" next.`,
+           title: "Playing Next!",
+           description: `"${songToPlay.title}" is now playing.`,
        });
    };
+
+    // Callback to handle moving a song to the second position (Play After Current)
+    const handleMoveSongUp = (indexToMove: number) => {
+        if (indexToMove <= 0 || indexToMove >= songQueue.length) { // Can't move up if already first or invalid
+            console.error("Invalid index for Move Up:", indexToMove);
+            return;
+        }
+        if (indexToMove === 1) { // Already second, nothing to do
+            console.log("Song is already second in queue.");
+            return;
+        }
+
+        console.log(`Moving song at index ${indexToMove} to the second position (index 1).`);
+
+        setSongQueue(prevQueue => {
+            const songToMove = prevQueue[indexToMove];
+            // Remove the song from its original position
+            const tempQueue = prevQueue.filter((_, index) => index !== indexToMove);
+            // Insert the song at index 1 (second position)
+            const newQueue = [
+                ...tempQueue.slice(0, 1), // Keep the first song (index 0)
+                songToMove,               // Insert the moved song at index 1
+                ...tempQueue.slice(1)     // Add the rest of the songs after index 1
+            ];
+
+             // Adjust currentSongIndex if necessary
+             // If the moved song was *before* the current song, the current song's index increases by 1.
+             // If the moved song was *after* the current song, the current song's index is unaffected by the removal, but might be affected by the insertion.
+             // This logic gets complex quickly. It might be simpler to just let the queue update
+             // and rely on the `useEffect` that watches `songQueue` and `currentSongIndex` to handle consistency.
+             // However, let's try a simple adjustment:
+             if (indexToMove < currentSongIndex && currentSongIndex > 1) {
+                 // The current song shifted one position later because a song before it was removed and inserted at [1].
+                 // But wait, the insertion also matters.
+                 // Let's rethink: Just update the queue. The effects should handle the rest.
+                 console.log("Queue order changed, effects will handle playback index.");
+             } else if (indexToMove > currentSongIndex && currentSongIndex >= 1) {
+                  // Current song index is not directly affected by removal, but might be by insertion if current was > 1.
+                   console.log("Queue order changed, effects will handle playback index.");
+             }
+             // If currentSongIndex is 0, it's unaffected.
+
+            toast({
+                title: "Moved Up",
+                description: `"${songToMove.title}" will play after the current song.`,
+            });
+            return newQueue;
+        });
+        // Do NOT manually change currentSongIndex here. Let useEffect handle it based on queue change.
+    };
+
+
+    // Callback to handle removing a song from the queue
+    const handleRemoveSong = (indexToRemove: number) => {
+        if (indexToRemove < 0 || indexToRemove >= songQueue.length) {
+            console.error("Invalid index for Remove Song:", indexToRemove);
+            return;
+        }
+
+        console.log(`Removing song at index ${indexToRemove}.`);
+        const songToRemove = songQueue[indexToRemove];
+
+        setSongQueue(prevQueue => {
+            const newQueue = prevQueue.filter((_, index) => index !== indexToRemove);
+
+            // --- Adjust currentSongIndex if the removed song affects it ---
+            if (indexToRemove === currentSongIndex) {
+                // If the currently playing song is removed:
+                console.log("Removed the currently playing song.");
+                if (player) {
+                    player.stopVideo(); // Stop playback
+                }
+                setIsPlaying(false);
+                setIsLoadingVideo(false);
+                setCurrentVideoId(null); // Clear video ID
+
+                // If the queue is now empty, index will be set to -1 by the other useEffect.
+                // If not empty, the song at the *next* logical index (which is now indexToRemove) should play.
+                // However, the `useEffect` watching `songQueue` change should handle this automatically
+                // because the song at `currentSongIndex` will be different or gone.
+                // So, we might not need to explicitly set `currentSongIndex` here. Let the effect run.
+                 console.log("Letting queue change effect handle the next song.");
+
+            } else if (indexToRemove < currentSongIndex) {
+                 // If a song *before* the current song is removed, the current song's index decreases by 1.
+                 console.log("Removed song before current, adjusting index.");
+                 // Decrement currentSongIndex directly in the state setter's scope
+                 // We need to update the index *based on the newQueue's perspective*
+                 // This is tricky within the setter. Let's try setting it *after* the queue update.
+                 // We'll handle this adjustment *outside* the setSongQueue call for clarity.
+            }
+             // If a song *after* the current song is removed, the current index remains the same.
+
+            toast({
+                title: "Song Removed",
+                description: `"${songToRemove.title}" has been removed from the queue.`,
+            });
+
+            return newQueue; // Return the updated queue
+        });
+
+        // Adjust currentSongIndex *after* the state update has been queued,
+        // but before the next render cycle completes if possible.
+        // This relies on the state update batching or sequential execution.
+        if (indexToRemove < currentSongIndex) {
+             setCurrentSongIndex(prevIndex => Math.max(0, prevIndex - 1));
+        }
+         // If indexToRemove === currentSongIndex, the other effect handles setting index based on new queue state.
+         // If indexToRemove > currentSongIndex, index doesn't change relative to the start.
+
+    };
 
 
   // --- YouTube Player Event Handlers ---
@@ -267,23 +387,9 @@ export default function LiveRoomPage() {
       console.log(`Video ended for song at index ${currentSongIndex}. Removing from queue.`);
       setIsPlaying(false);
       setIsLoadingVideo(false); // Ensure loading is off
-      setSongQueue(prevQueue => {
-          const songToRemove = prevQueue[currentSongIndex];
-          if (songToRemove) {
-            console.log(`Removing ended song: "${songToRemove.title}"`);
-          }
-           // Filter out the song at the *currentSongIndex* as it was before the state update
-           const newQueue = prevQueue.filter((_, index) => index !== currentSongIndex);
-          console.log(`New queue length after removal: ${newQueue.length}`);
-          // If queue becomes empty, index will be reset by the other effect.
-          // If not empty, the song at the previous `currentSongIndex` is gone,
-          // and the next song effectively shifts into `currentSongIndex`.
-          // The `useEffect` watching `songQueue` *reference* change should trigger reload.
-          // Do NOT manually change currentSongIndex here.
-          return newQueue;
-      });
-      // Reset video ID to allow re-loading if the same song is added again later
-      setCurrentVideoId(null);
+
+      // Use the handleRemoveSong function to manage state consistently
+      handleRemoveSong(currentSongIndex);
 
     } else if (state === YouTube.PlayerState.PLAYING) {
         console.log("Player state: PLAYING");
@@ -322,9 +428,7 @@ export default function LiveRoomPage() {
      setIsPlaying(false);
      setIsLoadingVideo(false);
      // Remove the problematic song and let useEffect handle the next one
-     setSongQueue(prevQueue => prevQueue.filter((_, index) => index !== currentSongIndex));
-     // Reset video ID
-     setCurrentVideoId(null);
+     handleRemoveSong(currentSongIndex); // Use the remove function
  };
 
 
@@ -366,23 +470,8 @@ export default function LiveRoomPage() {
     if (isLoadingVideo || currentSongIndex < 0 || currentSongIndex >= songQueue.length) return;
 
     console.log(`User skipped song at index ${currentSongIndex}`);
-    if (player) {
-        player.stopVideo(); // Stop immediately
-    }
-    setIsPlaying(false);
-    setIsLoadingVideo(false); // Ensure loading is off
-
-     // Remove the current song, useEffect will handle the next load based on queue change
-     setSongQueue(prevQueue => {
-        const songToSkip = prevQueue[currentSongIndex];
-        if (songToSkip) {
-            console.log(`Skipping song: "${songToSkip.title}"`);
-        }
-        // Filter out the song at the *currentSongIndex* as it was before the skip
-        return prevQueue.filter((_, index) => index !== currentSongIndex);
-    });
-     // Reset video ID
-     setCurrentVideoId(null);
+     // Use the handleRemoveSong function to manage state consistently
+     handleRemoveSong(currentSongIndex);
  };
 
   const getCurrentSong = (): Song | null => {
@@ -422,34 +511,9 @@ export default function LiveRoomPage() {
               )}
           </div>
           <div className="flex items-center space-x-1 md:space-x-2 flex-shrink-0">
-             {/* Terminate Room Button */}
-             <AlertDialog open={isTerminateDialogOpen} onOpenChange={setIsTerminateDialogOpen}>
-                <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/80 hover:bg-destructive/10" aria-label="Terminate Room">
-                    <Trash2 className="h-5 w-5" />
-                    </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                    <AlertDialogTitle className="flex items-center">
-                        <AlertTriangle className="h-5 w-5 mr-2 text-destructive" />
-                        Terminate Room?
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                        Are you sure you want to permanently terminate this live room? This action cannot be undone and will remove all participants.
-                    </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleTerminateRoom} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
-                        Terminate
-                    </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
 
-            {/* Share Button */}
-            <Dialog open={isShareModalOpen} onOpenChange={setIsShareModalOpen}>
+             {/* Share Button */}
+             <Dialog open={isShareModalOpen} onOpenChange={setIsShareModalOpen}>
                <DialogTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label="Share Room">
                   <Share2 className="h-5 w-5" />
@@ -476,6 +540,7 @@ export default function LiveRoomPage() {
                   <div className="flex flex-col items-center space-y-2">
                      <span className="text-sm text-muted-foreground">Scan QR Code</span>
                      <div className="p-2 border rounded-md bg-white" data-ai-hint="qrcode example placeholder">
+                       {/* Placeholder QR Code SVG */}
                        <svg width="96" height="96" viewBox="0 0 33 33" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path fillRule="evenodd" clipRule="evenodd" d="M18 0H0V18H18V0ZM14 4H4V14H14V4Z" fill="black"/>
                         <path fillRule="evenodd" clipRule="evenodd" d="M8 6H6V8H8V6Z" fill="black"/>
@@ -545,6 +610,32 @@ export default function LiveRoomPage() {
                  </SheetFooter>
               </SheetContent>
             </Sheet>
+
+             {/* Terminate Room Button (Moved Next to Participants) */}
+             <AlertDialog open={isTerminateDialogOpen} onOpenChange={setIsTerminateDialogOpen}>
+                <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/80 hover:bg-destructive/10" aria-label="Terminate Room">
+                    <X className="h-5 w-5" /> {/* Changed to X icon */}
+                    </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center">
+                        <AlertTriangle className="h-5 w-5 mr-2 text-destructive" />
+                        Terminate Room?
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Are you sure you want to permanently terminate this live room? This action cannot be undone and will remove all participants.
+                    </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleTerminateRoom} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                        Terminate
+                    </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {/* Toggle Queue Button */}
             <Button variant="ghost" size="icon" onClick={toggleQueue} aria-label={isQueueOpen ? "Hide Queue" : "Show Queue"}>
@@ -630,32 +721,70 @@ export default function LiveRoomPage() {
                 {songQueue.length === 0 ? (
                     <p className="text-sm text-muted-foreground text-center p-6">The queue is empty. Add a song!</p>
                 ) : (
-                    <ul className="p-2 space-y-2">
+                    <ul className="p-2 space-y-1"> {/* Reduced space between items slightly */}
                     {songQueue.map((song, index) => (
                         <li
                             key={song.id}
                             className={cn(
-                                "flex items-center p-3 rounded-md bg-card border border-transparent shadow-sm transition-colors duration-150 group", // Added group for potential actions later
-                                index === currentSongIndex && "ring-2 ring-primary bg-primary/10 border-primary/30", // Highlight current song
-                                index > currentSongIndex && "cursor-pointer hover:bg-accent/80" // Hover effect & cursor only for upcoming
+                                "flex items-center p-2 rounded-md bg-card border border-transparent shadow-sm transition-colors duration-150 group relative", // Added group and relative positioning
+                                index === currentSongIndex && "ring-1 ring-primary bg-primary/10 border-primary/30", // Adjusted highlight
+                                "hover:bg-accent group-hover:text-accent-foreground" // Apply hover styles to the li
                             )}
-                            title={index > currentSongIndex ? `Click to play "${song.title}" next` : `${song.title} - ${song.artist || 'Unknown'} (Added by ${song.user})`}
-                            onClick={index > currentSongIndex ? () => handleQueueItemClick(index) : undefined} // Add onClick handler for upcoming songs
+                             title={index > currentSongIndex ? `Play "${song.title}" next` : `${song.title} - ${song.artist || 'Unknown'} (Added by ${song.user})`}
+                            // onClick={index > currentSongIndex ? () => handlePlaySongNext(index) : undefined} // Play immediately on click
                         >
-                        {/* Use Play icon for current, number for upcoming */}
-                        <span className={cn(
-                            "text-lg font-semibold mr-3 text-muted-foreground w-8 text-center flex-shrink-0",
-                             index === currentSongIndex && "text-primary font-bold"
-                            )}>
-                            {index === currentSongIndex ? <Play className="h-5 w-5 inline-block text-primary animate-pulse" /> : `#${index + 1}`}
-                        </span>
-                        <div className="flex-1 overflow-hidden">
-                            <p className={cn("text-sm font-medium truncate", index === currentSongIndex && "font-bold")}>{song.title}</p>
-                            <p className="text-xs text-muted-foreground truncate">{song.artist || "Unknown Artist"}</p>
-                            <p className="text-xs text-muted-foreground/80 truncate">Added by {song.user}</p>
-                        </div>
-                        {/* Optional Remove Button (consider permissions) */}
-                        {/* <Button variant="ghost" size="icon" className="ml-2 h-6 w-6 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"> <X className="h-4 w-4" /> </Button> */}
+                            {/* Drag Handle (Optional Visual Cue) */}
+                            {/* <GripVertical className="h-4 w-4 mr-2 text-muted-foreground/50 cursor-grab flex-shrink-0 group-hover:text-accent-foreground" /> */}
+
+                            {/* Index Number or Play Icon */}
+                             <span className={cn(
+                                "text-base font-semibold mr-3 text-muted-foreground w-6 text-center flex-shrink-0", // Adjusted size and width
+                                index === currentSongIndex && "text-primary font-bold",
+                                "group-hover:text-foreground" // Change number color on hover
+                             )}>
+                               {index === currentSongIndex ? <Play className="h-5 w-5 inline-block text-primary animate-pulse" /> : `${index + 1}`}
+                            </span>
+
+                            {/* Song Info */}
+                            <div
+                                className="flex-1 overflow-hidden cursor-pointer"
+                                onClick={index > currentSongIndex ? () => handlePlaySongNext(index) : undefined} // Play immediately on click if upcoming
+                                >
+                                <p className={cn(
+                                    "text-sm font-medium truncate text-foreground",
+                                    "group-hover:font-bold group-hover:text-black dark:group-hover:text-white" // Bold black on hover
+                                    )}>
+                                    {song.title}
+                                </p>
+                                <p className={cn("text-xs truncate text-muted-foreground group-hover:text-foreground")}>{song.artist || "Unknown Artist"}</p>
+                                <p className={cn("text-xs truncate text-muted-foreground/80 group-hover:text-foreground/90")}>Added by {song.user}</p>
+                            </div>
+
+                             {/* Action Buttons Container */}
+                            <div className="ml-2 flex items-center space-x-0 opacity-0 group-hover:opacity-100 transition-opacity absolute right-1 top-1/2 transform -translate-y-1/2 bg-accent p-1 rounded-md">
+                                {/* Move Up Button (only show if not first or second) */}
+                                {index > 1 && (
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 text-foreground hover:bg-primary/20 hover:text-primary"
+                                        onClick={(e) => { e.stopPropagation(); handleMoveSongUp(index); }}
+                                        title="Move Up (Play After Current)"
+                                    >
+                                        <ArrowUp className="h-4 w-4" />
+                                    </Button>
+                                )}
+                                {/* Remove Button */}
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 text-destructive/80 hover:bg-destructive/20 hover:text-destructive"
+                                    onClick={(e) => { e.stopPropagation(); handleRemoveSong(index); }}
+                                    title="Remove Song"
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </div>
                         </li>
                     ))}
                     </ul>
