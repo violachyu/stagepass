@@ -16,12 +16,32 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from '@/hooks/use-toast';
-import { LogIn, X } from 'lucide-react';
+import { LogIn, X, Loader2 } from 'lucide-react'; // Added Loader2
 
 interface JoinStageModalProps {
   isOpen: boolean;
   onOpenChange: (isOpen: boolean) => void;
 }
+
+// --- Mock Database Check (Replace with actual API call) ---
+// Simulates checking if a room with the given code exists.
+// For now, let's assume any 6-digit code starting with '1' is valid, others are invalid.
+// In a real app, this would involve an API call to your backend/database.
+async function checkRoomExists(code: string): Promise<boolean> {
+  console.log(`Simulating database check for room code: ${code}`);
+  await new Promise(resolve => setTimeout(resolve, 700)); // Simulate network delay
+  const isValidFormat = /^\d{6}$/.test(code);
+  if (!isValidFormat) return false;
+
+  // --- Replace this mock logic with your actual backend check ---
+  const roomExists = code.startsWith('1'); // Example: Only codes starting with '1' are valid
+  // --- End of mock logic ---
+
+  console.log(`Room ${code} ${roomExists ? 'exists' : 'does not exist'} (simulated).`);
+  return roomExists;
+}
+// --- End Mock Database Check ---
+
 
 const JoinStageModal: React.FC<JoinStageModalProps> = ({ isOpen, onOpenChange }) => {
   const router = useRouter();
@@ -32,7 +52,10 @@ const JoinStageModal: React.FC<JoinStageModalProps> = ({ isOpen, onOpenChange })
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!preferredName.trim() || !joinCode.trim()) {
+    const trimmedCode = joinCode.trim();
+    const trimmedName = preferredName.trim();
+
+    if (!trimmedName || !trimmedCode) {
       toast({
         variant: "destructive",
         title: "Missing Information",
@@ -41,8 +64,8 @@ const JoinStageModal: React.FC<JoinStageModalProps> = ({ isOpen, onOpenChange })
       return;
     }
 
-    // Basic validation for 6-digit numeric code
-    if (!/^\d{6}$/.test(joinCode.trim())) {
+    // Basic validation for 6-digit numeric code (client-side first)
+    if (!/^\d{6}$/.test(trimmedCode)) {
        toast({
         variant: "destructive",
         title: "Invalid Code Format",
@@ -53,45 +76,44 @@ const JoinStageModal: React.FC<JoinStageModalProps> = ({ isOpen, onOpenChange })
 
 
     setIsSubmitting(true);
-    console.log("Attempting to join stage:", { preferredName, joinCode });
+    console.log("Attempting to join stage:", { preferredName: trimmedName, joinCode: trimmedCode });
 
-    // TODO: Implement actual validation logic for the join code (e.g., check if the room exists)
-    // Simulate API call/validation
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      // --- Backend Validation ---
+      const roomExists = await checkRoomExists(trimmedCode); // Call the (mock) validation function
 
-    // Assuming validation is successful for now
-    toast({
-      title: "Joining Stage...",
-      description: `Welcome, ${preferredName}! Joining room ${joinCode}.`,
-    });
+      if (!roomExists) {
+        // Room does not exist or code is invalid according to backend logic
+        throw new Error("Room not found or the code is invalid. Please double-check.");
+      }
 
-    // Close modal and navigate
-    onOpenChange(false);
-    // Redirect to the live room, passing the code. The live room page would then handle fetching room data based on the code.
-    router.push(`/live-room?joinCode=${joinCode.trim()}`); // Pass code as query param
+      // --- Success Case ---
+      toast({
+        title: "Joining Stage...",
+        description: `Welcome, ${trimmedName}! Joining room ${trimmedCode}.`,
+      });
 
-    // Reset form state if needed (modal might unmount anyway)
-    setPreferredName('');
-    setJoinCode('');
-    setIsSubmitting(false);
+      // Close modal and navigate
+      onOpenChange(false);
+      // Redirect to the live room, passing the code.
+      router.push(`/live-room?joinCode=${trimmedCode}`);
 
-    // --- Handle potential errors ---
-    // Example:
-    // try {
-    //   const roomExists = await checkRoomExists(joinCode.trim()); // Fictional function
-    //   if (roomExists) {
-    //      // Proceed with joining... toast, navigate
-    //   } else {
-    //     throw new Error("Room not found or code is invalid.");
-    //   }
-    // } catch (error: any) {
-    //    toast({
-    //     variant: "destructive",
-    //     title: "Failed to Join",
-    //     description: error.message || "Could not join the stage. Please check the code and try again.",
-    //   });
-    //    setIsSubmitting(false);
-    // }
+      // Reset form state if needed (modal might unmount anyway)
+      // setPreferredName('');
+      // setJoinCode('');
+
+    } catch (error: any) {
+      // --- Error Handling ---
+      console.error("Failed to join stage:", error.message);
+      toast({
+        variant: "destructive",
+        title: "Failed to Join",
+        description: error.message || "Could not join the stage. Please check the code and try again.",
+      });
+      // Keep modal open and allow retry
+    } finally {
+       setIsSubmitting(false); // Re-enable button regardless of outcome
+    }
   };
 
   // Clear form when modal is closed
@@ -111,7 +133,7 @@ const JoinStageModal: React.FC<JoinStageModalProps> = ({ isOpen, onOpenChange })
             <LogIn className="mr-2 h-5 w-5" /> Join a Live Stage
           </DialogTitle>
           <DialogClose asChild>
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" disabled={isSubmitting}>
               <X className="h-4 w-4" />
               <span className="sr-only">Close</span>
             </Button>
@@ -156,7 +178,14 @@ const JoinStageModal: React.FC<JoinStageModalProps> = ({ isOpen, onOpenChange })
              className="w-full sm:w-auto bg-primary text-primary-foreground hover:bg-primary/90"
              disabled={isSubmitting || !preferredName.trim() || !joinCode.trim() || !/^\d{6}$/.test(joinCode.trim())}
             >
-              {isSubmitting ? 'Joining...' : 'Join Stage'}
+              {isSubmitting ? (
+                 <>
+                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                   Joining...
+                 </>
+               ) : (
+                 'Join Stage'
+               )}
             </Button>
           </DialogFooter>
         </form>
