@@ -44,10 +44,10 @@ interface Participant {
 
 // --- Placeholder Data ---
 const initialSongQueue: Song[] = [
-  { id: 1, title: 'Bohemian Rhapsody', artist: 'Queen', user: 'Alice' },
-  { id: 2, title: 'Hotel California', artist: 'Eagles', user: 'Bob' },
-  { id: 3, title: 'Like a Rolling Stone', artist: 'Bob Dylan', user: 'Charlie' },
-  { id: 4, title: 'Billie Jean', artist: 'Michael Jackson', user: 'David' },
+  // { id: 1, title: 'Bohemian Rhapsody', artist: 'Queen', user: 'Alice' },
+  // { id: 2, title: 'Hotel California', artist: 'Eagles', user: 'Bob' },
+  // { id: 3, title: 'Like a Rolling Stone', artist: 'Bob Dylan', user: 'Charlie' },
+  // { id: 4, title: 'Billie Jean', artist: 'Michael Jackson', user: 'David' },
   { id: 5, title: 'Stairway to Heaven', artist: 'Led Zeppelin', user: 'Eve' },
   // Add more for testing scroll
   // { id: 6, title: 'Sweet Child o\' Mine', artist: 'Guns N\' Roses', user: 'Frank' },
@@ -209,12 +209,12 @@ export default function LiveRoomPage() {
     }
   };
 
- const onPlayerError: YouTubeProps['onError'] = (event) => {
+  const onPlayerError: YouTubeProps['onError'] = (event) => {
     console.error("YouTube Player Error:", event.data);
     toast({
         variant: "destructive",
-        title: "Playback Error",
-        description: "An error occurred with the video playback. Skipping to the next song.",
+        title: `Playback Error (Code ${event.data})`,
+        description: `An error occurred with the video playback. Skipping to the next song.`,
     });
     playNextSong(); // Skip on error
  };
@@ -387,7 +387,7 @@ export default function LiveRoomPage() {
              </div>
           )}
           {currentVideoId ? (
-            <YouTube
+           <YouTube
               videoId={currentVideoId}
               opts={opts}
               onReady={onPlayerReady}
@@ -473,6 +473,6 @@ export default function LiveRoomPage() {
         </div>
       </aside>
     </div>
-  );
+  ); 
 }
 

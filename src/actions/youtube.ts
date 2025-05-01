@@ -47,7 +47,7 @@ export async function searchYoutubeKaraoke(params: { title: string; artist?: str
 
   const query = `${title} ${artist || ""} karaoke`.trim();
   const encodedQuery = encodeURIComponent(query);
-  const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodedQuery}&maxResults=1&type=video&key=${apiKey}`;
+  const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodedQuery}&maxResults=1&type=video&videoEmbeddable=true&key=${apiKey}`;
 
   try {
     console.log(`Searching YouTube with query: "${query}"`);
