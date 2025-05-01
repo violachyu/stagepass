@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from '@/components/ui/sheet';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea } from '@/components/ui/scroll-area'; // Import ScrollArea
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Share2, Users, QrCode, Mic, MicOff, X, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,6 +23,10 @@ const initialSongQueue = [
   { id: 6, title: 'Sweet Child o\' Mine', artist: 'Guns N\' Roses', user: 'Frank' },
   { id: 7, title: 'Imagine', artist: 'John Lennon', user: 'Grace' },
   { id: 8, title: 'Smells Like Teen Spirit', artist: 'Nirvana', user: 'Heidi' },
+  { id: 9, title: 'Another Brick in the Wall', artist: 'Pink Floyd', user: 'Ivy' },
+  { id: 10, title: 'Wonderwall', artist: 'Oasis', user: 'Judy' },
+  { id: 11, title: 'Hey Jude', artist: 'The Beatles', user: 'Kyle' },
+  { id: 12, title: 'Purple Haze', artist: 'Jimi Hendrix', user: 'Liam' },
 ];
 
 const initialParticipants = [
@@ -197,8 +201,8 @@ export default function LiveRoomPage() {
                </Button>
                */}
             </CardHeader>
-            <CardContent className="p-0 flex-1">
-              <ScrollArea className="h-full">
+            <CardContent className="p-0 flex-1"> {/* Make CardContent flexible */}
+              <ScrollArea className="h-full"> {/* Make ScrollArea take full height of CardContent */}
                 <ul className="p-4 space-y-3">
                   {songQueue.map((song, index) => (
                     <li key={song.id} className="flex items-center p-3 rounded-md bg-card border border-border shadow-sm hover:bg-accent transition-colors">
@@ -224,5 +228,3 @@ export default function LiveRoomPage() {
     </div>
   );
 }
-
-    
