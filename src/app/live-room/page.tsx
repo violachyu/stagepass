@@ -279,8 +279,12 @@ export default function LiveRoomPage() {
 
         console.log(`Moving song at index ${indexToMove} to the second position (index 1).`);
 
+        let movedSongTitle = "Unknown"; // Keep track of the title for the toast
+
         setSongQueue(prevQueue => {
             const songToMove = prevQueue[indexToMove];
+            movedSongTitle = songToMove?.title || "Unknown"; // Capture title
+
             // Remove the song from its original position
             const tempQueue = prevQueue.filter((_, index) => index !== indexToMove);
             // Insert the song at index 1 (second position)
@@ -290,28 +294,14 @@ export default function LiveRoomPage() {
                 ...tempQueue.slice(1)     // Add the rest of the songs after index 1
             ];
 
-             // Adjust currentSongIndex if necessary
-             // If the moved song was *before* the current song, the current song's index increases by 1.
-             // If the moved song was *after* the current song, the current song's index is unaffected by the removal, but might be affected by the insertion.
-             // This logic gets complex quickly. It might be simpler to just let the queue update
-             // and rely on the `useEffect` that watches `songQueue` and `currentSongIndex` to handle consistency.
-             // However, let's try a simple adjustment:
-             if (indexToMove < currentSongIndex && currentSongIndex > 1) {
-                 // The current song shifted one position later because a song before it was removed and inserted at [1].
-                 // But wait, the insertion also matters.
-                 // Let's rethink: Just update the queue. The effects should handle the rest.
-                 console.log("Queue order changed, effects will handle playback index.");
-             } else if (indexToMove > currentSongIndex && currentSongIndex >= 1) {
-                  // Current song index is not directly affected by removal, but might be by insertion if current was > 1.
-                   console.log("Queue order changed, effects will handle playback index.");
-             }
-             // If currentSongIndex is 0, it's unaffected.
+            console.log("Queue order changed, effects will handle playback index.");
 
-            toast({
-                title: "Moved Up",
-                description: `"${songToMove.title}" will play after the current song.`,
-            });
             return newQueue;
+        });
+
+        toast({
+            title: "Moved Up",
+            description: `"${movedSongTitle}" will play after the current song.`,
         });
         // Do NOT manually change currentSongIndex here. Let useEffect handle it based on queue change.
     };
@@ -325,55 +315,41 @@ export default function LiveRoomPage() {
         }
 
         console.log(`Removing song at index ${indexToRemove}.`);
-        const songToRemove = songQueue[indexToRemove];
+        const songToRemove = songQueue[indexToRemove]; // Get song details before removal
 
         setSongQueue(prevQueue => {
-            const newQueue = prevQueue.filter((_, index) => index !== indexToRemove);
+            return prevQueue.filter((_, index) => index !== indexToRemove); // Return the updated queue
+        });
 
-            // --- Adjust currentSongIndex if the removed song affects it ---
-            if (indexToRemove === currentSongIndex) {
-                // If the currently playing song is removed:
-                console.log("Removed the currently playing song.");
-                if (player) {
-                    player.stopVideo(); // Stop playback
-                }
-                setIsPlaying(false);
-                setIsLoadingVideo(false);
-                setCurrentVideoId(null); // Clear video ID
-
-                // If the queue is now empty, index will be set to -1 by the other useEffect.
-                // If not empty, the song at the *next* logical index (which is now indexToRemove) should play.
-                // However, the `useEffect` watching `songQueue` change should handle this automatically
-                // because the song at `currentSongIndex` will be different or gone.
-                // So, we might not need to explicitly set `currentSongIndex` here. Let the effect run.
-                 console.log("Letting queue change effect handle the next song.");
-
-            } else if (indexToRemove < currentSongIndex) {
-                 // If a song *before* the current song is removed, the current song's index decreases by 1.
-                 console.log("Removed song before current, adjusting index.");
-                 // Decrement currentSongIndex directly in the state setter's scope
-                 // We need to update the index *based on the newQueue's perspective*
-                 // This is tricky within the setter. Let's try setting it *after* the queue update.
-                 // We'll handle this adjustment *outside* the setSongQueue call for clarity.
-            }
-             // If a song *after* the current song is removed, the current index remains the same.
-
-            toast({
+        // Show toast *after* updating the state
+         if (songToRemove) {
+             toast({
                 title: "Song Removed",
                 description: `"${songToRemove.title}" has been removed from the queue.`,
             });
+         }
 
-            return newQueue; // Return the updated queue
-        });
+        // --- Adjust currentSongIndex logic ---
+         if (indexToRemove === currentSongIndex) {
+            // If the currently playing song is removed:
+            console.log("Removed the currently playing song.");
+            if (player) {
+                player.stopVideo(); // Stop playback
+            }
+            setIsPlaying(false);
+            setIsLoadingVideo(false);
+            setCurrentVideoId(null); // Clear video ID
 
-        // Adjust currentSongIndex *after* the state update has been queued,
-        // but before the next render cycle completes if possible.
-        // This relies on the state update batching or sequential execution.
-        if (indexToRemove < currentSongIndex) {
+            // The useEffect watching songQueue change will handle starting the next song
+            // if the queue is not empty, or resetting if it is.
+             console.log("Letting queue change effect handle the next song.");
+
+        } else if (indexToRemove < currentSongIndex) {
+             // If a song *before* the current song is removed, the current song's index decreases by 1.
+             console.log("Removed song before current, adjusting index.");
              setCurrentSongIndex(prevIndex => Math.max(0, prevIndex - 1));
         }
-         // If indexToRemove === currentSongIndex, the other effect handles setting index based on new queue state.
-         // If indexToRemove > currentSongIndex, index doesn't change relative to the start.
+        // If a song *after* the current song is removed, the current index remains the same.
 
     };
 
@@ -399,7 +375,12 @@ export default function LiveRoomPage() {
       setIsLoadingVideo(false); // Ensure loading is off
 
       // Use the handleRemoveSong function to manage state consistently
-      handleRemoveSong(currentSongIndex);
+      // Make sure the index is valid before attempting removal
+       if (currentSongIndex >= 0 && currentSongIndex < songQueue.length) {
+           handleRemoveSong(currentSongIndex);
+       } else {
+            console.warn("Attempted to remove song on ENDED, but index was invalid:", currentSongIndex);
+       }
 
     } else if (state === YouTube.PlayerState.PLAYING) {
         console.log("Player state: PLAYING");
@@ -438,7 +419,11 @@ export default function LiveRoomPage() {
      setIsPlaying(false);
      setIsLoadingVideo(false);
      // Remove the problematic song and let useEffect handle the next one
-     handleRemoveSong(currentSongIndex); // Use the remove function
+      if (currentSongIndex >= 0 && currentSongIndex < songQueue.length) {
+         handleRemoveSong(currentSongIndex); // Use the remove function
+      } else {
+         console.warn("Attempted to remove song on ERROR, but index was invalid:", currentSongIndex);
+      }
  };
 
 
@@ -731,7 +716,7 @@ export default function LiveRoomPage() {
                                 index === currentSongIndex && "ring-1 ring-primary bg-primary/10 border-primary/30", // Adjusted highlight
                                 "hover:bg-accent group-hover:text-accent-foreground" // Apply hover styles to the li
                             )}
-                             title={index > currentSongIndex ? `Play "${song.title}" next` : `${song.title} - ${song.artist || 'Unknown'} (Added by ${song.user})`}
+                             title={index !== currentSongIndex ? `Play "${song.title}" next` : `${song.title} - ${song.artist || 'Unknown'} (Added by ${song.user})`}
                             // onClick={index > currentSongIndex ? () => handlePlaySongNext(index) : undefined} // Play immediately on click
                         >
                             {/* Drag Handle (Optional Visual Cue) */}
