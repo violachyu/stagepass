@@ -1,14 +1,16 @@
 
 "use client";
 
-import React from 'react';
+import React, { useState } from 'react'; // Import useState
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { PlusCircle, LogIn } from 'lucide-react';
 import { useRouter } from 'next/navigation'; // Use next/navigation for App Router
+import JoinStageModal from '@/components/dashboard/join-stage-modal'; // Import the modal
 
 export default function DashboardPage() {
   const router = useRouter();
+  const [isJoinModalOpen, setIsJoinModalOpen] = useState(false); // State for modal visibility
 
   const handleCreate = () => {
     // Navigate to the create stage page
@@ -16,9 +18,9 @@ export default function DashboardPage() {
   };
 
   const handleJoin = () => {
-    // TODO: Implement logic for joining an existing stage/session
-    console.log("Join button clicked");
-    // Example navigation: router.push('/join-stage');
+    // Open the join stage modal
+    setIsJoinModalOpen(true);
+    console.log("Join button clicked - opening modal");
   };
 
   return (
@@ -44,7 +46,9 @@ export default function DashboardPage() {
           </Button>
         </CardContent>
       </Card>
+
+      {/* Render the Join Stage Modal */}
+      <JoinStageModal isOpen={isJoinModalOpen} onOpenChange={setIsJoinModalOpen} />
     </div>
   );
 }
-
