@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,8 +9,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Share2, Users, QrCode, Mic, MicOff, X } from 'lucide-react';
+import { Share2, Users, QrCode, Mic, MicOff, X, PanelRightOpen, PanelRightClose } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils'; // Import cn for conditional classes
 
 // Placeholder data
 const initialSongQueue = [
@@ -19,6 +20,9 @@ const initialSongQueue = [
   { id: 3, title: 'Like a Rolling Stone', artist: 'Bob Dylan', user: 'Charlie' },
   { id: 4, title: 'Billie Jean', artist: 'Michael Jackson', user: 'David' },
   { id: 5, title: 'Stairway to Heaven', artist: 'Led Zeppelin', user: 'Eve' },
+  { id: 6, title: 'Sweet Child o\' Mine', artist: 'Guns N\' Roses', user: 'Frank' },
+  { id: 7, title: 'Imagine', artist: 'John Lennon', user: 'Grace' },
+  { id: 8, title: 'Smells Like Teen Spirit', artist: 'Nirvana', user: 'Heidi' },
 ];
 
 const initialParticipants = [
@@ -26,6 +30,7 @@ const initialParticipants = [
   { id: 'user2', name: 'Bob', avatar: '/avatars/bob.png', isMuted: false },
   { id: 'user3', name: 'Charlie', avatar: '/avatars/charlie.png', isMuted: true },
   { id: 'user4', name: 'David', avatar: '/avatars/david.png', isMuted: false },
+  { id: 'user5', name: 'Eve', avatar: '/avatars/eve.png', isMuted: false },
 ];
 
 export default function LiveRoomPage() {
@@ -33,12 +38,22 @@ export default function LiveRoomPage() {
   const [participants, setParticipants] = useState(initialParticipants);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isParticipantsSheetOpen, setIsParticipantsSheetOpen] = useState(false);
+  const [isQueueOpen, setIsQueueOpen] = useState(true); // State for song queue visibility
   const [roomCode, setRoomCode] = useState<string | null>(null);
+  const asideRef = useRef<HTMLElement>(null); // Ref for aside width transition
 
   useEffect(() => {
     // Generate 6-digit code only on the client side
     setRoomCode(Math.random().toString().slice(2, 8));
   }, []);
+
+  useEffect(() => {
+    // Force reflow for transition on mount/state change if needed, though Tailwind handles this well
+    if (asideRef.current) {
+      // You might not need this, Tailwind's transition classes usually work automatically
+      void asideRef.current.offsetWidth;
+    }
+  }, [isQueueOpen]);
 
 
   const toggleMute = (participantId: string) => {
@@ -49,10 +64,14 @@ export default function LiveRoomPage() {
     );
   };
 
+  const toggleQueue = () => {
+    setIsQueueOpen(!isQueueOpen);
+  };
+
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
       {/* Main Content Area (Video) */}
-      <main className="flex-1 flex flex-col p-4 md:p-6">
+      <main className="flex-1 flex flex-col p-4 md:p-6 transition-all duration-300 ease-in-out">
         <header className="flex justify-between items-center mb-4">
           <h1 className="text-xl md:text-2xl font-bold text-primary">StagePass Live</h1>
           <div className="flex items-center space-x-2">
@@ -85,8 +104,8 @@ export default function LiveRoomPage() {
                      <span className="text-sm text-muted-foreground">Scan QR Code</span>
                     {/* Placeholder QR Code */}
                      <div className="p-2 border rounded-md bg-white" data-ai-hint="qrcode">
+                       {/* In a real app, replace with actual QR code component/image */}
                        <QrCode className="h-24 w-24 text-black" />
-                       {/* In a real app, replace with actual QR code component */}
                      </div>
                   </div>
                 </div>
@@ -134,6 +153,11 @@ export default function LiveRoomPage() {
                  </SheetFooter>
               </SheetContent>
             </Sheet>
+
+            {/* Toggle Queue Button */}
+            <Button variant="ghost" size="icon" onClick={toggleQueue} aria-label={isQueueOpen ? "Hide Queue" : "Show Queue"}>
+              {isQueueOpen ? <PanelRightClose className="h-5 w-5" /> : <PanelRightOpen className="h-5 w-5" />}
+            </Button>
           </div>
         </header>
 
@@ -153,34 +177,52 @@ export default function LiveRoomPage() {
       </main>
 
       {/* Right Sidebar (Song Queue) */}
-      <aside className="w-64 md:w-80 border-l border-border flex flex-col h-full">
-        <Card className="flex flex-col flex-1 border-0 rounded-none shadow-none">
-          <CardHeader className="border-b border-border">
-            <CardTitle className="text-lg">Song Queue</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 flex-1">
-            <ScrollArea className="h-full">
-              <ul className="p-4 space-y-3">
-                {songQueue.map((song, index) => (
-                  <li key={song.id} className="flex items-center p-3 rounded-md bg-card border border-border shadow-sm hover:bg-accent transition-colors">
-                    <span className="text-lg font-semibold mr-3 text-muted-foreground">#{index + 1}</span>
-                    <div className="flex-1 overflow-hidden">
-                      <p className="text-sm font-medium truncate">{song.title}</p>
-                      <p className="text-xs text-muted-foreground truncate">{song.artist} (Added by {song.user})</p>
-                    </div>
-                  </li>
-                ))}
-                {songQueue.length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-4">The queue is empty. Add a song!</p>
-                )}
-              </ul>
-            </ScrollArea>
-          </CardContent>
-           <div className="p-4 border-t border-border mt-auto">
-              <Button className="w-full">Add Song</Button> {/* TODO: Implement Add Song functionality */}
-           </div>
-        </Card>
+      <aside
+        ref={asideRef}
+        className={cn(
+          "border-l border-border flex flex-col h-full transition-all duration-300 ease-in-out",
+          isQueueOpen ? "w-64 md:w-80 opacity-100" : "w-0 opacity-0 pointer-events-none -mr-1" // -mr-1 helps hide border smoothly
+        )}
+        aria-hidden={!isQueueOpen} // Accessibility
+      >
+        {/* Wrap content in another div to prevent content visibility during collapse */}
+        <div className={cn("flex flex-col flex-1 overflow-hidden", isQueueOpen ? "opacity-100" : "opacity-0")}>
+          <Card className="flex flex-col flex-1 border-0 rounded-none shadow-none">
+            <CardHeader className="border-b border-border flex flex-row justify-between items-center">
+              <CardTitle className="text-lg">Song Queue</CardTitle>
+               {/* Optionally keep the close button inside the panel as well */}
+               {/*
+               <Button variant="ghost" size="icon" onClick={toggleQueue} className="md:hidden">
+                 <X className="h-4 w-4" />
+               </Button>
+               */}
+            </CardHeader>
+            <CardContent className="p-0 flex-1">
+              <ScrollArea className="h-full">
+                <ul className="p-4 space-y-3">
+                  {songQueue.map((song, index) => (
+                    <li key={song.id} className="flex items-center p-3 rounded-md bg-card border border-border shadow-sm hover:bg-accent transition-colors">
+                      <span className="text-lg font-semibold mr-3 text-muted-foreground">#{index + 1}</span>
+                      <div className="flex-1 overflow-hidden">
+                        <p className="text-sm font-medium truncate">{song.title}</p>
+                        <p className="text-xs text-muted-foreground truncate">{song.artist} (Added by {song.user})</p>
+                      </div>
+                    </li>
+                  ))}
+                  {songQueue.length === 0 && (
+                    <p className="text-sm text-muted-foreground text-center py-4">The queue is empty. Add a song!</p>
+                  )}
+                </ul>
+              </ScrollArea>
+            </CardContent>
+            <div className="p-4 border-t border-border mt-auto">
+                <Button className="w-full">Add Song</Button> {/* TODO: Implement Add Song functionality */}
+            </div>
+          </Card>
+        </div>
       </aside>
     </div>
   );
 }
+
+    
