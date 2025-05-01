@@ -45,15 +45,12 @@ export default function CreateStagePage() {
     console.log("Creating stage with settings:", { maxCapacity, privacy });
     toast({
       title: "Stage Created",
-      description: `Your ${privacy} stage with capacity ${maxCapacity} is ready.`,
+      description: `Your ${privacy} stage with capacity ${maxCapacity} is ready. Redirecting...`,
     });
 
-    // Example: Navigate to the newly created stage/live room
-    // Replace '/live-room/new-stage-id' with the actual route
-    // router.push('/live-room/new-stage-id');
-
-     // For now, just navigate back to dashboard after simulated creation
-    setTimeout(() => router.push('/dashboard'), 1000);
+    // Navigate to the live room page
+    // In a real app, you'd likely pass the stage ID or config in the URL or state
+    router.push('/live-room');
   };
 
   return (
