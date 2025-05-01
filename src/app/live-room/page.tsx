@@ -68,6 +68,7 @@ export default function LiveRoomPage() {
   const [isQueueOpen, setIsQueueOpen] = useState(true);
   const [isAddSongSheetOpen, setIsAddSongSheetOpen] = useState(false); // State for AddSongSheet
   const [roomCode, setRoomCode] = useState<string | null>(null);
+  const [shareUrl, setShareUrl] = useState<string | null>(null); // State for the share URL
   const asideRef = useRef<HTMLElement>(null);
   const { toast } = useToast();
   const router = useRouter();
@@ -83,8 +84,17 @@ export default function LiveRoomPage() {
   useEffect(() => {
     // Generate a 6-digit numeric code
     const generateRoomCode = () => Math.floor(100000 + Math.random() * 900000).toString();
-    setRoomCode(generateRoomCode());
-  }, []);
+    const newRoomCode = generateRoomCode();
+    setRoomCode(newRoomCode);
+
+    // Generate share URL when roomCode is set
+    // Use window.location.origin for the base URL
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+    // TODO: Consider using a dedicated join page route if needed, e.g., /join?code=...
+    // For now, assume joining happens by visiting the live room with a query param
+    setShareUrl(`${baseUrl}/live-room?joinCode=${newRoomCode}`);
+
+  }, []); // Run only once on mount
 
   useEffect(() => {
     if (songQueue.length > 0 && currentSongIndex === -1 && !currentVideoId) {
@@ -540,9 +550,9 @@ export default function LiveRoomPage() {
                   <div className="flex flex-col items-center space-y-2">
                      <span className="text-sm text-muted-foreground">Scan QR Code</span>
                      <div className="p-2 border rounded-md bg-white" data-ai-hint="qrcode">
-                       {roomCode ? (
+                       {shareUrl ? (
                          <img
-                           src={`https://api.qrserver.com/v1/create-qr-code/?size=96x96&data=${encodeURIComponent(roomCode)}`}
+                           src={`https://api.qrserver.com/v1/create-qr-code/?size=96x96&data=${encodeURIComponent(shareUrl)}`}
                            alt={`QR Code for Room ${roomCode}`}
                            width="96"
                            height="96"
