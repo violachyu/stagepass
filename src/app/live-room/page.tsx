@@ -25,7 +25,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { searchYoutubeKaraoke } from '@/actions/youtube';
 import { useToast } from '@/hooks/use-toast';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation'; // Import useSearchParams
 import { AddSongSheet } from '@/components/live-room/add-song-sheet'; // Import the new component
 
 // --- Types ---
@@ -72,6 +72,7 @@ export default function LiveRoomPage() {
   const asideRef = useRef<HTMLElement>(null);
   const { toast } = useToast();
   const router = useRouter();
+  const searchParams = useSearchParams(); // Get URL search parameters
 
   // YouTube Player State
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
@@ -82,19 +83,30 @@ export default function LiveRoomPage() {
 
   // --- Effects ---
   useEffect(() => {
-    // Generate a 6-digit numeric code
-    const generateRoomCode = () => Math.floor(100000 + Math.random() * 900000).toString();
-    const newRoomCode = generateRoomCode();
-    setRoomCode(newRoomCode);
+    const joinCodeFromUrl = searchParams.get('joinCode');
+    let finalRoomCode: string;
 
-    // Generate share URL when roomCode is set
-    // Use window.location.origin for the base URL
+    if (joinCodeFromUrl && /^\d{6}$/.test(joinCodeFromUrl)) {
+      // Use the code from URL if valid
+      finalRoomCode = joinCodeFromUrl;
+      console.log(`Joining room with code from URL: ${finalRoomCode}`);
+    } else {
+      // Generate a new 6-digit numeric code for creators
+      const generateRoomCode = () => Math.floor(100000 + Math.random() * 900000).toString();
+      finalRoomCode = generateRoomCode();
+      console.log(`Created new room with generated code: ${finalRoomCode}`);
+      // Optionally, update the URL without reloading if creating a new room
+      // router.replace(`/live-room?joinCode=${finalRoomCode}`, { scroll: false });
+    }
+
+    setRoomCode(finalRoomCode);
+
+    // Generate share URL based on the final room code
     const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    // TODO: Consider using a dedicated join page route if needed, e.g., /join?code=...
-    // For now, assume joining happens by visiting the live room with a query param
-    setShareUrl(`${baseUrl}/live-room?joinCode=${newRoomCode}`);
+    setShareUrl(`${baseUrl}/live-room?joinCode=${finalRoomCode}`);
 
-  }, []); // Run only once on mount
+  }, [searchParams, router]); // Rerun if searchParams change (shouldn't typically happen without navigation)
+
 
   useEffect(() => {
     if (songQueue.length > 0 && currentSongIndex === -1 && !currentVideoId) {
@@ -135,17 +147,19 @@ export default function LiveRoomPage() {
             videoIdToLoad = await searchYoutubeKaraoke({ title: song.title, artist: song.artist });
              // Update the song object in the queue with the fetched ID for caching
             if (videoIdToLoad) {
-                setSongQueue(prevQueue => prevQueue.map((s, idx) =>
+                // Use functional update to avoid stale state issues if multiple updates happen quickly
+                 setSongQueue(prevQueue => prevQueue.map((s, idx) =>
                     idx === currentSongIndex ? { ...s, videoId: videoIdToLoad } : s
-                ));
+                 ));
             }
           } catch (error) {
-             toast({
-                variant: "destructive",
-                title: "Search Error",
-                description: `Error searching for "${song.title}". Skipping song.`,
-            });
-            console.error("Error during YouTube search:", error);
+             console.error("Error during YouTube search:", error);
+             // Use toast inside try-catch or ensure it's handled outside if possible
+              toast({
+                 variant: "destructive",
+                 title: "Search Error",
+                 description: `Error searching for "${song.title}". Skipping song.`,
+             });
             // Skip the song if search fails by removing it
              handleRemoveSong(currentSongIndex); // Use the remove function
             setIsLoadingVideo(false);
@@ -170,7 +184,7 @@ export default function LiveRoomPage() {
                  setIsLoadingVideo(false);
             }
         } else {
-            toast({
+             toast({
                 variant: "destructive",
                 title: "Video Not Found",
                 description: `Could not find a karaoke video for "${song.title}". Skipping song.`,
@@ -191,9 +205,23 @@ export default function LiveRoomPage() {
       }
     };
 
-    loadVideo();
+    // Wrap async call in a function to avoid direct async in useEffect
+    const runLoadVideo = () => {
+        loadVideo().catch(error => {
+             console.error("Unhandled error in loadVideo effect:", error);
+             setIsLoadingVideo(false); // Ensure loading state is reset on error
+             // Potentially show a generic error toast
+             toast({
+                variant: "destructive",
+                title: "Playback Error",
+                description: "An unexpected error occurred while loading the video.",
+             });
+        });
+    };
+
+    runLoadVideo();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSongIndex, songQueue]); // Rerun when index or the queue array *reference* changes
+  }, [currentSongIndex, /* songQueue reference is intentionally watched */ songQueue, toast /* add toast dependency */]);
 
 
   // --- Callbacks ---
@@ -217,7 +245,7 @@ export default function LiveRoomPage() {
   };
 
   // Callback function for adding a song from the sheet
-  const handleAddSong = (newSong: { title: string; artist?: string; videoId?: string }) => {
+  const handleAddSong = useCallback((newSong: { title: string; artist?: string; videoId?: string }) => {
      const songToAdd: Song = {
       ...newSong,
       id: Date.now(), // Simple unique ID using timestamp
@@ -229,10 +257,10 @@ export default function LiveRoomPage() {
       description: `"${songToAdd.title}" has been added to the queue.`,
     });
     console.log("Added song:", songToAdd);
-  };
+  }, [toast]); // Add toast as dependency
 
    // Callback to handle clicking a song in the queue (Plays Immediately)
-   const handlePlaySongNext = (clickedIndex: number) => {
+   const handlePlaySongNext = useCallback((clickedIndex: number) => {
       if (clickedIndex === currentSongIndex || isLoadingVideo) {
           console.log("Clicked current song or video is loading, doing nothing.");
           return; // Do nothing if clicking the current song or loading
@@ -264,10 +292,10 @@ export default function LiveRoomPage() {
            title: "Playing Next!",
            description: `"${songToPlay.title}" is now playing.`,
        });
-   };
+   }, [currentSongIndex, isLoadingVideo, songQueue, player, isPlaying, toast]); // Add dependencies
 
     // Callback to handle moving a song to the second position (Play After Current)
-    const handleMoveSongUp = (indexToMove: number) => {
+    const handleMoveSongUp = useCallback((indexToMove: number) => {
         if (indexToMove <= 0 || indexToMove >= songQueue.length) { // Can't move up if already first or invalid
             console.error("Invalid index for Move Up:", indexToMove);
             return;
@@ -282,6 +310,11 @@ export default function LiveRoomPage() {
         let movedSongTitle = "Unknown"; // Keep track of the title for the toast
 
         setSongQueue(prevQueue => {
+            // Ensure index is still valid in case of rapid changes
+            if (indexToMove >= prevQueue.length) {
+                console.warn("Index became invalid before Move Up update could process.");
+                return prevQueue; // Return original queue if index is no longer valid
+            }
             const songToMove = prevQueue[indexToMove];
             movedSongTitle = songToMove?.title || "Unknown"; // Capture title
 
@@ -304,69 +337,84 @@ export default function LiveRoomPage() {
             description: `"${movedSongTitle}" will play after the current song.`,
         });
         // Do NOT manually change currentSongIndex here. Let useEffect handle it based on queue change.
-    };
+    }, [songQueue, toast]); // Add dependencies
 
 
     // Callback to handle removing a song from the queue
-    const handleRemoveSong = (indexToRemove: number) => {
-        if (indexToRemove < 0 || indexToRemove >= songQueue.length) {
-            console.error("Invalid index for Remove Song:", indexToRemove);
-            return;
-        }
-
-        console.log(`Removing song at index ${indexToRemove}.`);
-        const songToRemove = songQueue[indexToRemove]; // Get song details before removal
-
+    const handleRemoveSong = useCallback((indexToRemove: number) => {
+        // Use state updater function to get the latest queue state
         setSongQueue(prevQueue => {
-            return prevQueue.filter((_, index) => index !== indexToRemove); // Return the updated queue
+            if (indexToRemove < 0 || indexToRemove >= prevQueue.length) {
+                console.error("Invalid index for Remove Song:", indexToRemove, "Queue Length:", prevQueue.length);
+                return prevQueue; // Return current state if index is invalid
+            }
+
+            console.log(`Removing song at index ${indexToRemove}.`);
+            const songToRemove = prevQueue[indexToRemove]; // Get song details before removal
+
+            const newQueue = prevQueue.filter((_, index) => index !== indexToRemove); // Create the new queue
+
+             // Show toast *after* figuring out the state update
+             if (songToRemove) {
+                 toast({
+                    title: "Song Removed",
+                    description: `"${songToRemove.title}" has been removed from the queue.`,
+                });
+             }
+
+             // --- Adjust currentSongIndex logic ---
+             // This needs to happen *after* the queue update is determined
+             // We need to set the *next* state for the index based on the *current* index and the removed index
+             setCurrentSongIndex(prevIndex => {
+                 if (indexToRemove === prevIndex) {
+                    // If the currently playing song is removed:
+                    console.log("Removed the currently playing song.");
+                    if (player) {
+                        player.stopVideo(); // Stop playback
+                    }
+                    setIsPlaying(false);
+                    setIsLoadingVideo(false);
+                    setCurrentVideoId(null); // Clear video ID
+
+                    // The useEffect watching songQueue change will handle starting the next song
+                    // if the queue is not empty, or resetting if it is.
+                    console.log("Letting queue change effect handle the next song.");
+                    // Since the queue length decreases, the next song (if any) will now be at the *same* index 'indexToRemove'
+                    // However, the effect listening to songQueue change is more reliable. Resetting index to -1 might be safer,
+                    // letting the effect pick the next one (index 0 if queue not empty). Let's try resetting.
+                    // return -1; // Reset index, let effect find the next one.
+                    // Alternative: If the queue still has items at this index after removal, keep it. Otherwise reset.
+                    return newQueue.length > indexToRemove ? indexToRemove : -1;
+
+
+                 } else if (indexToRemove < prevIndex) {
+                     // If a song *before* the current song is removed, the current song's index decreases by 1.
+                     console.log("Removed song before current, adjusting index.");
+                     return Math.max(0, prevIndex - 1); // Ensure index doesn't go below 0
+                 } else {
+                      // If a song *after* the current song is removed, the current index remains the same.
+                      return prevIndex;
+                 }
+             });
+
+
+             return newQueue; // Return the updated queue
         });
 
-        // Show toast *after* updating the state
-         if (songToRemove) {
-             toast({
-                title: "Song Removed",
-                description: `"${songToRemove.title}" has been removed from the queue.`,
-            });
-         }
-
-        // --- Adjust currentSongIndex logic ---
-         if (indexToRemove === currentSongIndex) {
-            // If the currently playing song is removed:
-            console.log("Removed the currently playing song.");
-            if (player) {
-                player.stopVideo(); // Stop playback
-            }
-            setIsPlaying(false);
-            setIsLoadingVideo(false);
-            setCurrentVideoId(null); // Clear video ID
-
-            // The useEffect watching songQueue change will handle starting the next song
-            // if the queue is not empty, or resetting if it is.
-             console.log("Letting queue change effect handle the next song.");
-
-        } else if (indexToRemove < currentSongIndex) {
-             // If a song *before* the current song is removed, the current song's index decreases by 1.
-             console.log("Removed song before current, adjusting index.");
-             setCurrentSongIndex(prevIndex => Math.max(0, prevIndex - 1));
-        }
-        // If a song *after* the current song is removed, the current index remains the same.
-
-    };
+    }, [player, toast]); // Add dependencies
 
 
   // --- YouTube Player Event Handlers ---
-  const onPlayerReady: YouTubeProps['onReady'] = (event) => {
+  const onPlayerReady: YouTubeProps['onReady'] = useCallback((event) => {
     console.log("Player ready");
     setPlayer(event.target);
-    // Autoplay should handle playing when videoId changes and playerVars.autoplay=1
-    // If we just loaded because of a queue click, ensure it plays
      if (currentVideoId && !isPlaying && isLoadingVideo) {
         console.log("Player ready, attempting to play video due to recent load.");
         event.target.playVideo();
     }
-  };
+  }, [currentVideoId, isPlaying, isLoadingVideo]); // Add dependencies
 
-  const onPlayerStateChange: YouTubeProps['onStateChange'] = (event) => {
+  const onPlayerStateChange: YouTubeProps['onStateChange'] = useCallback((event) => {
     const state = event.data;
     console.log("Player state changed:", state, `(Current Index: ${currentSongIndex}, Queue Length: ${songQueue.length})`);
     if (state === YouTube.PlayerState.ENDED) {
@@ -374,12 +422,13 @@ export default function LiveRoomPage() {
       setIsPlaying(false);
       setIsLoadingVideo(false); // Ensure loading is off
 
-      // Use the handleRemoveSong function to manage state consistently
-      // Make sure the index is valid before attempting removal
        if (currentSongIndex >= 0 && currentSongIndex < songQueue.length) {
            handleRemoveSong(currentSongIndex);
        } else {
-            console.warn("Attempted to remove song on ENDED, but index was invalid:", currentSongIndex);
+            console.warn("Attempted to remove song on ENDED, but index was invalid:", currentSongIndex, "Queue Length:", songQueue.length);
+            // Try to recover if possible, e.g., reset index?
+            if(songQueue.length > 0) setCurrentSongIndex(0); // Go to start if queue not empty
+            else setCurrentSongIndex(-1);
        }
 
     } else if (state === YouTube.PlayerState.PLAYING) {
@@ -389,26 +438,24 @@ export default function LiveRoomPage() {
     } else if (state === YouTube.PlayerState.PAUSED) {
         console.log("Player state: PAUSED");
         setIsPlaying(false);
-        setIsLoadingVideo(false); // Ensure loading is off if paused during initial load
+        setIsLoadingVideo(false);
     } else if (state === YouTube.PlayerState.BUFFERING) {
         console.log("Player state: BUFFERING");
         setIsLoadingVideo(true);
     } else if (state === YouTube.PlayerState.CUED) {
        console.log("Player state: CUED");
-       setIsLoadingVideo(true); // Assume loading until PLAYING starts
-        // If autoplay is 1, it should start. If not, maybe force play?
-        // Only force play if we intended it to start (e.g., after load/skip/reorder)
-       if (player && !isPlaying && (isLoadingVideo || currentSongIndex === 0)) { // Heuristic: play if loading or it's the first item
+       setIsLoadingVideo(true);
+       if (player && !isPlaying && (isLoadingVideo || currentSongIndex === 0)) {
           console.log("Video cued, attempting play...");
           player.playVideo();
        }
     } else if (state === YouTube.PlayerState.UNSTARTED) {
         console.log("Player state: UNSTARTED");
-        setIsLoadingVideo(true); // Loading until cued/playing
+        setIsLoadingVideo(true);
     }
-  };
+  }, [currentSongIndex, songQueue.length, handleRemoveSong, player, isPlaying, isLoadingVideo]); // Add dependencies
 
-  const onPlayerError: YouTubeProps['onError'] = (event) => {
+  const onPlayerError: YouTubeProps['onError'] = useCallback((event) => {
     console.error(`YouTube Player Error (Code ${event.data}) for song at index ${currentSongIndex}`);
     const currentSongTitle = songQueue[currentSongIndex]?.title || "the current song";
     toast({
@@ -418,64 +465,61 @@ export default function LiveRoomPage() {
     });
      setIsPlaying(false);
      setIsLoadingVideo(false);
-     // Remove the problematic song and let useEffect handle the next one
       if (currentSongIndex >= 0 && currentSongIndex < songQueue.length) {
-         handleRemoveSong(currentSongIndex); // Use the remove function
+         handleRemoveSong(currentSongIndex);
       } else {
          console.warn("Attempted to remove song on ERROR, but index was invalid:", currentSongIndex);
+         // Reset index if queue has items
+         if(songQueue.length > 0) setCurrentSongIndex(0);
+         else setCurrentSongIndex(-1);
       }
- };
+ }, [currentSongIndex, songQueue, handleRemoveSong, toast]); // Add dependencies
 
 
   const opts: YouTubeProps['opts'] = {
-    // height: '100%', // Let aspect ratio control height
-    // width: '100%',
     playerVars: {
       autoplay: 1,
       controls: 1,
       modestbranding: 1,
       rel: 0,
-      fs: 1, // Allow fullscreen
+      fs: 1,
     },
   };
 
   // --- Control Handlers ---
-  const handlePlayPause = () => {
+  const handlePlayPause = useCallback(() => {
     if (!player) return;
     const currentState = player.getPlayerState();
     if (currentState === YouTube.PlayerState.PLAYING) {
         player.pauseVideo();
         console.log("User paused video");
-        setIsPlaying(false); // Manually set state as event might lag
+        setIsPlaying(false);
     } else {
-        // If video exists (even if paused, ended, cued), play it
         if (currentVideoId && currentState !== YouTube.PlayerState.PLAYING) {
              player.playVideo();
              console.log("User played video");
-             setIsPlaying(true); // Manually set state
+             setIsPlaying(true);
         } else if (songQueue.length > 0 && currentSongIndex === -1) {
-             // Start queue from beginning if nothing loaded yet
              console.log("User started queue from beginning");
-             setCurrentSongIndex(0); // Trigger useEffect
+             setCurrentSongIndex(0);
         }
     }
-  };
+  }, [player, currentVideoId, songQueue.length, currentSongIndex]); // Add dependencies
 
- const handleSkip = () => {
+ const handleSkip = useCallback(() => {
     if (isLoadingVideo || currentSongIndex < 0 || currentSongIndex >= songQueue.length) return;
 
     console.log(`User skipped song at index ${currentSongIndex}`);
-     // Use the handleRemoveSong function to manage state consistently
      handleRemoveSong(currentSongIndex);
- };
+ }, [isLoadingVideo, currentSongIndex, songQueue.length, handleRemoveSong]); // Add dependencies
 
-  const getCurrentSong = (): Song | null => {
-      // Check index validity against the *current* queue length
+  const getCurrentSong = useCallback((): Song | null => {
       if (currentSongIndex >= 0 && currentSongIndex < songQueue.length) {
           return songQueue[currentSongIndex];
       }
       return null;
-  }
+  }, [currentSongIndex, songQueue]); // Add dependencies
+
   const currentSong = getCurrentSong();
 
 
@@ -794,4 +838,5 @@ export default function LiveRoomPage() {
     </div>
   );
 }
+
 
