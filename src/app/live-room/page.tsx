@@ -6,14 +6,26 @@ import YouTube, { YouTubePlayer, YouTubeProps } from 'react-youtube';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Share2, Users, QrCode, Mic, MicOff, X, PanelRightOpen, PanelRightClose, Play, Pause, SkipForward, Loader2 } from 'lucide-react';
+import { Share2, Users, QrCode, Mic, MicOff, X, PanelRightOpen, PanelRightClose, Play, Pause, SkipForward, Loader2, Trash2, AlertTriangle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { searchYoutubeKaraoke } from '@/actions/youtube'; // Import the server action
 import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation'; // Import useRouter
 
 // --- Types ---
 interface Song {
@@ -61,10 +73,12 @@ export default function LiveRoomPage() {
   const [participants, setParticipants] = useState<Participant[]>(initialParticipants);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isParticipantsSheetOpen, setIsParticipantsSheetOpen] = useState(false);
+  const [isTerminateDialogOpen, setIsTerminateDialogOpen] = useState(false); // State for terminate dialog
   const [isQueueOpen, setIsQueueOpen] = useState(true);
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const asideRef = useRef<HTMLElement>(null);
   const { toast } = useToast();
+  const router = useRouter(); // Initialize router
 
   // YouTube Player State
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
@@ -111,7 +125,8 @@ export default function LiveRoomPage() {
       } else {
         // No more songs or invalid index
         setCurrentVideoId(null);
-        setCurrentSongIndex(-1); // Reset index if queue ends
+        // Don't reset index here, keep it at the end or -1
+        // setCurrentSongIndex(-1);
         setIsPlaying(false);
         console.log("Queue finished or index invalid.");
       }
@@ -134,14 +149,32 @@ export default function LiveRoomPage() {
     setIsQueueOpen(!isQueueOpen);
   };
 
+  const handleTerminateRoom = () => {
+    console.log("Terminating room...");
+    // TODO: Add actual room termination logic (API call, etc.)
+
+    // Close the dialog
+    setIsTerminateDialogOpen(false);
+
+    // Show confirmation toast
+    toast({
+        title: "Room Terminated",
+        description: "The live room has been closed.",
+    });
+
+    // Redirect to dashboard
+    router.push('/dashboard');
+  };
+
   const playNextSong = useCallback(() => {
     console.log("Playing next song...");
-    if (currentSongIndex < songQueue.length - 1) {
-        setCurrentSongIndex(prevIndex => prevIndex + 1);
+    const nextIndex = currentSongIndex + 1;
+    if (nextIndex < songQueue.length) {
+        setCurrentSongIndex(nextIndex);
     } else {
         // End of queue
         setCurrentVideoId(null);
-        setCurrentSongIndex(-1); // Reset index
+        setCurrentSongIndex(songQueue.length); // Set index past the end
         setIsPlaying(false);
         toast({ title: "Queue Finished", description: "No more songs in the queue." });
         console.log("Reached end of queue.");
@@ -153,7 +186,7 @@ export default function LiveRoomPage() {
   const onPlayerReady: YouTubeProps['onReady'] = (event) => {
     console.log("Player ready");
     setPlayer(event.target);
-    // Don't auto-play here, wait for state change
+    // Autoplay is handled by opts.playerVars.autoplay and changing videoId
   };
 
   const onPlayerStateChange: YouTubeProps['onStateChange'] = (event) => {
@@ -169,10 +202,10 @@ export default function LiveRoomPage() {
     } else if (state === YouTube.PlayerState.PAUSED) {
         setIsPlaying(false);
     } else if (state === YouTube.PlayerState.CUED) {
-       // Video is ready, play if we intend to
-       if (isPlaying && player) {
-           player.playVideo();
-       }
+       // Video is ready, play if we intend to (handled by autoplay: 1)
+       // if (isPlaying && player) {
+       //     player.playVideo();
+       // }
     }
   };
 
@@ -207,7 +240,7 @@ export default function LiveRoomPage() {
     } else {
         if (currentVideoId) { // Only play if there's a video loaded
              player.playVideo();
-        } else if (songQueue.length > 0 && currentSongIndex === -1) {
+        } else if (songQueue.length > 0 && currentSongIndex < 0) {
              // If paused at the beginning, start the first song
              setCurrentSongIndex(0);
         }
@@ -232,10 +265,35 @@ export default function LiveRoomPage() {
       <main className="flex-1 flex flex-col p-4 md:p-6 transition-all duration-300 ease-in-out">
         <header className="flex justify-between items-center mb-4">
           <h1 className="text-xl md:text-2xl font-bold text-primary">StagePass Live</h1>
-          <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1 md:space-x-2">
+             {/* Terminate Room Button */}
+             <AlertDialog open={isTerminateDialogOpen} onOpenChange={setIsTerminateDialogOpen}>
+                <AlertDialogTrigger asChild>
+                    <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive/80 hover:bg-destructive/10" aria-label="Terminate Room">
+                    <Trash2 className="h-5 w-5" />
+                    </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                    <AlertDialogTitle className="flex items-center">
+                        <AlertTriangle className="h-5 w-5 mr-2 text-destructive" />
+                        Terminate Room?
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Are you sure you want to permanently terminate this live room? This action cannot be undone and will remove all participants.
+                    </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleTerminateRoom} className="bg-destructive hover:bg-destructive/90 text-destructive-foreground">
+                        Terminate
+                    </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
             {/* Share Button */}
             <Dialog open={isShareModalOpen} onOpenChange={setIsShareModalOpen}>
-              {/* ... (Dialog content remains the same) ... */}
                <DialogTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label="Share Room">
                   <Share2 className="h-5 w-5" />
@@ -271,7 +329,6 @@ export default function LiveRoomPage() {
 
             {/* Participants Button */}
             <Sheet open={isParticipantsSheetOpen} onOpenChange={setIsParticipantsSheetOpen}>
-              {/* ... (Sheet content remains the same) ... */}
                <SheetTrigger asChild>
                 <Button variant="ghost" size="icon" aria-label="View Participants">
                   <Users className="h-5 w-5" />
@@ -298,7 +355,10 @@ export default function LiveRoomPage() {
                           size="icon"
                           onClick={() => toggleMute(p.id)}
                           aria-label={p.isMuted ? 'Unmute' : 'Mute'}
-                          className={p.isMuted ? 'text-destructive hover:text-destructive/80' : 'text-muted-foreground hover:text-foreground'}
+                          className={cn(
+                            'hover:bg-accent/50',
+                            p.isMuted ? 'text-destructive hover:text-destructive/80' : 'text-muted-foreground hover:text-foreground'
+                          )}
                         >
                           {p.isMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
                         </Button>
@@ -337,7 +397,9 @@ export default function LiveRoomPage() {
               iframeClassName="absolute top-0 left-0 w-full h-full"
             />
           ) : (
-            !isLoadingVideo && <p className="text-muted-foreground">No video playing. Add songs to the queue!</p>
+            !isLoadingVideo && <p className="text-muted-foreground">
+                {songQueue.length > 0 ? "Queue finished!" : "No video playing. Add songs to the queue!"}
+            </p>
           )}
         </div>
 
@@ -347,7 +409,7 @@ export default function LiveRoomPage() {
                 variant="ghost"
                 size="icon"
                 onClick={handlePlayPause}
-                disabled={isLoadingVideo || (!currentVideoId && songQueue.length === 0)} // Disable if loading or no video/queue
+                disabled={isLoadingVideo || (!currentVideoId && currentSongIndex >= songQueue.length) } // Disable if loading or no video/queue ended
                 aria-label={isPlaying ? "Pause" : "Play"}
             >
                 {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
@@ -389,8 +451,8 @@ export default function LiveRoomPage() {
                             index === currentSongIndex && "ring-2 ring-primary bg-primary/10" // Highlight current song
                         )}
                     >
-                      <span className={cn("text-lg font-semibold mr-3 text-muted-foreground", index === currentSongIndex && "text-primary")}>
-                        {index === currentSongIndex ? <Play className="h-5 w-5 inline-block mr-1" /> : `#${index + 1}`}
+                      <span className={cn("text-lg font-semibold mr-3 text-muted-foreground w-8 text-center", index === currentSongIndex && "text-primary")}>
+                        {index === currentSongIndex ? <Play className="h-5 w-5 inline-block" /> : `#${index + 1}`}
                       </span>
                       <div className="flex-1 overflow-hidden">
                         <p className={cn("text-sm font-medium truncate", index === currentSongIndex && "font-bold")}>{song.title}</p>
@@ -413,3 +475,4 @@ export default function LiveRoomPage() {
     </div>
   );
 }
+

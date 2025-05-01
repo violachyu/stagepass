@@ -45,7 +45,7 @@ export async function searchYoutubeKaraoke(params: { title: string; artist?: str
     return null;
   }
 
-  const query = `${title} ${artist || ''} karaoke`.trim();
+  const query = `${title} ${artist || ""} karaoke`.trim();
   const encodedQuery = encodeURIComponent(query);
   const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodedQuery}&maxResults=1&type=video&key=${apiKey}`;
 
@@ -63,15 +63,14 @@ export async function searchYoutubeKaraoke(params: { title: string; artist?: str
     const parsedData = YouTubeSearchResponseSchema.safeParse(data);
 
     if (!parsedData.success) {
-        console.error("Failed to parse YouTube API response:", parsedData.error);
-        return null;
+      console.error("Failed to parse YouTube API response:", parsedData.error);
+      return null;
     }
 
     if (parsedData.data.error) {
-        console.error(`YouTube API Error (${parsedData.data.error.code}):`, parsedData.data.error.message);
-        return null;
+      console.error(`YouTube API Error (${parsedData.data.error.code}):`, parsedData.data.error.message);
+      return null;
     }
-
 
     if (parsedData.data.items && parsedData.data.items.length > 0) {
       const videoId = parsedData.data.items[0].id.videoId;
