@@ -79,6 +79,7 @@
     "@types/three": "^0.168.0",
     "@types/youtube": "^0.0.50",
     "@types/ws": "^8.18.0",
+    "dotenv": "^16.4.7",
     "drizzle-kit": "^0.31.0",
     "genkit-cli": "^1.0.4",
     "postcss": "^8",
