@@ -10,11 +10,11 @@ export const stages = pgTable("stages", {
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
     maxCapacity: integer().default(10),
-    private: boolean("private").notNull().default(false),
-    terminated: boolean("terminated").notNull().default(false),
+    is_private: boolean("is_private").notNull().default(false),
+    is_terminated: boolean("is_terminated").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
-    adminUserId: text("user_id")
+    adminUserId: text("admin_user_id")
         .notNull()
         .references(() => users.id, { onDelete: "cascade" })
 })
