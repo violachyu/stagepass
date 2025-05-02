@@ -14,7 +14,7 @@ export const stages = pgTable("stages", {
     terminated: boolean("terminated").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
-    adminUserId: text("user_id")
+    adminUserId: text("admin_user_id")
         .notNull()
         .references(() => users.id, { onDelete: "cascade" })
 })
