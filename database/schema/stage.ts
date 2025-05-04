@@ -14,9 +14,8 @@ export const stages = pgTable("stages", {
     is_terminated: boolean("is_terminated").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
-    adminUserId: text("admin_user_id")
-        .notNull()
-        .references(() => users.id, { onDelete: "cascade" })
+    adminUserId: text("admin_user_id").notNull()
+    // .references(() => users.id, { onDelete: "cascade" })
 })
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -46,7 +45,7 @@ export const insertStageSchema = createInsertSchema(stages, {
 })
 
 
-export type NewStage = z.infer<typeof insertStageSchema>;
+export type StageData = z.infer<typeof insertStageSchema>;
 
 export default {
     users,
