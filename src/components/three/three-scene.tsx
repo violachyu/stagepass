@@ -1,11 +1,10 @@
 "use client";
 
-import React, { useRef, useEffect, useCallback, memo } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-// Memoize the component to prevent unnecessary re-renders
-const ThreeScene = memo(function ThreeScene() {
+const ThreeScene: React.FC = () => {
   const mountRef = useRef<HTMLDivElement>(null);
   const animationFrameId = useRef<number>();
 
@@ -181,7 +180,7 @@ const ThreeScene = memo(function ThreeScene() {
   }, [setupScene]); // useEffect depends on setupScene
 
   return <div ref={mountRef} className="h-full w-full" />;
-});
+};
 
 export default ThreeScene;
 
