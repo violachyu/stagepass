@@ -4,7 +4,8 @@ import { neonConfig, Pool } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-serverless';
 import { WebSocket } from 'ws';
 
-import * as schema from './schema/index';
+import * as schema from './schema';
+
 
 const connectionString =
     process.env.NODE_ENV === 'production' ? process.env.DATABASE_URL : process.env.LOCAL_DATABASE_URL;
