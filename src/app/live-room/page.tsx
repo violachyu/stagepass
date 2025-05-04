@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -80,6 +79,60 @@ export default function LiveRoomPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoadingVideo, setIsLoadingVideo] = useState(false);
   const [currentSongIndex, setCurrentSongIndex] = useState<number>(-1); // Index in the *current* songQueue
+
+  // Define handleRemoveSong early so it can be used in the useEffect dependency array
+  const handleRemoveSong = useCallback((indexToRemove: number) => {
+    // Use state updater function to get the latest queue state
+    setSongQueue(prevQueue => {
+        if (indexToRemove < 0 || indexToRemove >= prevQueue.length) {
+            console.error("Invalid index for Remove Song:", indexToRemove, "Queue Length:", prevQueue.length);
+            return prevQueue; // Return current state if index is invalid
+        }
+
+        console.log(`Removing song at index ${indexToRemove}.`);
+        const songToRemove = prevQueue[indexToRemove]; // Get song details before removal
+
+        const newQueue = prevQueue.filter((_, index) => index !== indexToRemove); // Create the new queue
+
+        // Show toast *after* figuring out the state update
+        if (songToRemove) {
+            toast({
+                title: "Song Removed",
+                description: `"${songToRemove.title}" has been removed from the queue.`,
+            });
+        }
+
+        // --- Adjust currentSongIndex logic ---
+        // This needs to happen *after* the queue update is determined
+        // We need to set the *next* state for the index based on the *current* index and the removed index
+        setCurrentSongIndex(prevIndex => {
+            if (indexToRemove === prevIndex) {
+                // If the currently playing song is removed:
+                console.log("Removed the currently playing song.");
+                if (player) {
+                    player.stopVideo(); // Stop playback
+                }
+                setIsPlaying(false);
+                setIsLoadingVideo(false);
+                setCurrentVideoId(null); // Clear video ID
+
+                // The useEffect watching songQueue change will handle starting the next song
+                // if the queue is not empty, or resetting if it is.
+                console.log("Letting queue change effect handle the next song.");
+                return newQueue.length > indexToRemove ? indexToRemove : -1;
+            } else if (indexToRemove < prevIndex) {
+                // If a song *before* the current song is removed, the current song's index decreases by 1.
+                console.log("Removed song before current, adjusting index.");
+                return Math.max(0, prevIndex - 1); // Ensure index doesn't go below 0
+            } else {
+                // If a song *after* the current song is removed, the current index remains the same.
+                return prevIndex;
+            }
+        });
+
+        return newQueue; // Return the updated queue
+    });
+  }, [player, toast]); // Add required dependencies
 
   // --- Effects ---
   useEffect(() => {
@@ -219,10 +272,16 @@ export default function LiveRoomPage() {
         });
     };
 
-    runLoadVideo();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSongIndex, /* songQueue reference is intentionally watched */ songQueue, toast /* add toast dependency */]);
-
+    // Only run the video loading effect when the index changes or when a videoId is not available
+    // for the current song. This prevents infinite updates.
+    const currentSong = songQueue[currentSongIndex];
+    const needsVideoId = currentSong && !currentSong.videoId && !currentVideoId;
+    
+    if (currentSongIndex >= 0 && (needsVideoId || !currentVideoId)) {
+      runLoadVideo();
+    }
+  // Now we can safely use handleRemoveSong in the dependency array since it's defined above
+  }, [currentSongIndex, currentVideoId, handleRemoveSong, songQueue, toast, player]);
 
   // --- Callbacks ---
   const toggleMute = (participantId: string) => {
@@ -259,150 +318,85 @@ export default function LiveRoomPage() {
     console.log("Added song:", songToAdd);
   }, [toast]); // Add toast as dependency
 
-   // Callback to handle clicking a song in the queue (Plays Immediately)
-   const handlePlaySongNext = useCallback((clickedIndex: number) => {
-      if (clickedIndex === currentSongIndex || isLoadingVideo) {
-          console.log("Clicked current song or video is loading, doing nothing.");
-          return; // Do nothing if clicking the current song or loading
-      }
-       if (clickedIndex < 0 || clickedIndex >= songQueue.length) { // Check if valid index
-           console.error("Invalid clicked index for Play Next:", clickedIndex);
-           return;
-       }
+  // Callback to handle clicking a song in the queue (Plays Immediately)
+  const handlePlaySongNext = useCallback((clickedIndex: number) => {
+    if (clickedIndex === currentSongIndex || isLoadingVideo) {
+        console.log("Clicked current song or video is loading, doing nothing.");
+        return; // Do nothing if clicking the current song or loading
+    }
+    if (clickedIndex < 0 || clickedIndex >= songQueue.length) { // Check if valid index
+        console.error("Invalid clicked index for Play Next:", clickedIndex);
+        return;
+    }
 
-       console.log(`Clicked Play Next for song at index ${clickedIndex}. Moving to front.`);
-       const songToPlay = songQueue[clickedIndex];
-       // Filter out the song and insert it at the beginning
-       const newQueue = [
-           songToPlay,
-           ...songQueue.filter((_, index) => index !== clickedIndex)
-       ];
+    console.log(`Clicked Play Next for song at index ${clickedIndex}. Moving to front.`);
+    const songToPlay = songQueue[clickedIndex];
+    // Filter out the song and insert it at the beginning
+    const newQueue = [
+        songToPlay,
+        ...songQueue.filter((_, index) => index !== clickedIndex)
+    ];
 
-       setSongQueue(newQueue);
-       setCurrentSongIndex(0); // Set index to 0 to play the moved song next
+    setSongQueue(newQueue);
+    setCurrentSongIndex(0); // Set index to 0 to play the moved song next
 
-        // Stop current video immediately if one is playing
-       if (player && (isPlaying || player.getPlayerState() === YouTube.PlayerState.PAUSED)) {
-          player.stopVideo();
-          setIsPlaying(false); // Update state manually
-       }
-       setCurrentVideoId(null); // Force re-evaluation in useEffect
-       setIsLoadingVideo(true); // Indicate loading starts
-       toast({
-           title: "Playing Next!",
-           description: `"${songToPlay.title}" is now playing.`,
-       });
-   }, [currentSongIndex, isLoadingVideo, songQueue, player, isPlaying, toast]); // Add dependencies
+    // Stop current video immediately if one is playing
+    if (player && (isPlaying || player.getPlayerState() === YouTube.PlayerState.PAUSED)) {
+      player.stopVideo();
+      setIsPlaying(false); // Update state manually
+    }
+    setCurrentVideoId(null); // Force re-evaluation in useEffect
+    setIsLoadingVideo(true); // Indicate loading starts
+    toast({
+        title: "Playing Next!",
+        description: `"${songToPlay.title}" is now playing.`,
+    });
+  }, [currentSongIndex, isLoadingVideo, songQueue, player, isPlaying, toast]); // Add dependencies
 
-    // Callback to handle moving a song to the second position (Play After Current)
-    const handleMoveSongUp = useCallback((indexToMove: number) => {
-        if (indexToMove <= 0 || indexToMove >= songQueue.length) { // Can't move up if already first or invalid
-            console.error("Invalid index for Move Up:", indexToMove);
-            return;
+  // Callback to handle moving a song to the second position (Play After Current)
+  const handleMoveSongUp = useCallback((indexToMove: number) => {
+    if (indexToMove <= 0 || indexToMove >= songQueue.length) { // Can't move up if already first or invalid
+        console.error("Invalid index for Move Up:", indexToMove);
+        return;
+    }
+    if (indexToMove === 1) { // Already second, nothing to do
+        console.log("Song is already second in queue.");
+        return;
+    }
+
+    console.log(`Moving song at index ${indexToMove} to the second position (index 1).`);
+
+    let movedSongTitle = "Unknown"; // Keep track of the title for the toast
+
+    setSongQueue(prevQueue => {
+        // Ensure index is still valid in case of rapid changes
+        if (indexToMove >= prevQueue.length) {
+            console.warn("Index became invalid before Move Up update could process.");
+            return prevQueue; // Return original queue if index is no longer valid
         }
-        if (indexToMove === 1) { // Already second, nothing to do
-            console.log("Song is already second in queue.");
-            return;
-        }
+        const songToMove = prevQueue[indexToMove];
+        movedSongTitle = songToMove?.title || "Unknown"; // Capture title
 
-        console.log(`Moving song at index ${indexToMove} to the second position (index 1).`);
+        // Remove the song from its original position
+        const tempQueue = prevQueue.filter((_, index) => index !== indexToMove);
+        // Insert the song at index 1 (second position)
+        const newQueue = [
+            ...tempQueue.slice(0, 1), // Keep the first song (index 0)
+            songToMove,               // Insert the moved song at index 1
+            ...tempQueue.slice(1)     // Add the rest of the songs after index 1
+        ];
 
-        let movedSongTitle = "Unknown"; // Keep track of the title for the toast
+        console.log("Queue order changed, effects will handle playback index.");
 
-        setSongQueue(prevQueue => {
-            // Ensure index is still valid in case of rapid changes
-            if (indexToMove >= prevQueue.length) {
-                console.warn("Index became invalid before Move Up update could process.");
-                return prevQueue; // Return original queue if index is no longer valid
-            }
-            const songToMove = prevQueue[indexToMove];
-            movedSongTitle = songToMove?.title || "Unknown"; // Capture title
+        return newQueue;
+    });
 
-            // Remove the song from its original position
-            const tempQueue = prevQueue.filter((_, index) => index !== indexToMove);
-            // Insert the song at index 1 (second position)
-            const newQueue = [
-                ...tempQueue.slice(0, 1), // Keep the first song (index 0)
-                songToMove,               // Insert the moved song at index 1
-                ...tempQueue.slice(1)     // Add the rest of the songs after index 1
-            ];
-
-            console.log("Queue order changed, effects will handle playback index.");
-
-            return newQueue;
-        });
-
-        toast({
-            title: "Moved Up",
-            description: `"${movedSongTitle}" will play after the current song.`,
-        });
-        // Do NOT manually change currentSongIndex here. Let useEffect handle it based on queue change.
-    }, [songQueue, toast]); // Add dependencies
-
-
-    // Callback to handle removing a song from the queue
-    const handleRemoveSong = useCallback((indexToRemove: number) => {
-        // Use state updater function to get the latest queue state
-        setSongQueue(prevQueue => {
-            if (indexToRemove < 0 || indexToRemove >= prevQueue.length) {
-                console.error("Invalid index for Remove Song:", indexToRemove, "Queue Length:", prevQueue.length);
-                return prevQueue; // Return current state if index is invalid
-            }
-
-            console.log(`Removing song at index ${indexToRemove}.`);
-            const songToRemove = prevQueue[indexToRemove]; // Get song details before removal
-
-            const newQueue = prevQueue.filter((_, index) => index !== indexToRemove); // Create the new queue
-
-             // Show toast *after* figuring out the state update
-             if (songToRemove) {
-                 toast({
-                    title: "Song Removed",
-                    description: `"${songToRemove.title}" has been removed from the queue.`,
-                });
-             }
-
-             // --- Adjust currentSongIndex logic ---
-             // This needs to happen *after* the queue update is determined
-             // We need to set the *next* state for the index based on the *current* index and the removed index
-             setCurrentSongIndex(prevIndex => {
-                 if (indexToRemove === prevIndex) {
-                    // If the currently playing song is removed:
-                    console.log("Removed the currently playing song.");
-                    if (player) {
-                        player.stopVideo(); // Stop playback
-                    }
-                    setIsPlaying(false);
-                    setIsLoadingVideo(false);
-                    setCurrentVideoId(null); // Clear video ID
-
-                    // The useEffect watching songQueue change will handle starting the next song
-                    // if the queue is not empty, or resetting if it is.
-                    console.log("Letting queue change effect handle the next song.");
-                    // Since the queue length decreases, the next song (if any) will now be at the *same* index 'indexToRemove'
-                    // However, the effect listening to songQueue change is more reliable. Resetting index to -1 might be safer,
-                    // letting the effect pick the next one (index 0 if queue not empty). Let's try resetting.
-                    // return -1; // Reset index, let effect find the next one.
-                    // Alternative: If the queue still has items at this index after removal, keep it. Otherwise reset.
-                    return newQueue.length > indexToRemove ? indexToRemove : -1;
-
-
-                 } else if (indexToRemove < prevIndex) {
-                     // If a song *before* the current song is removed, the current song's index decreases by 1.
-                     console.log("Removed song before current, adjusting index.");
-                     return Math.max(0, prevIndex - 1); // Ensure index doesn't go below 0
-                 } else {
-                      // If a song *after* the current song is removed, the current index remains the same.
-                      return prevIndex;
-                 }
-             });
-
-
-             return newQueue; // Return the updated queue
-        });
-
-    }, [player, toast]); // Add dependencies
-
+    toast({
+        title: "Moved Up",
+        description: `"${movedSongTitle}" will play after the current song.`,
+    });
+    // Do NOT manually change currentSongIndex here. Let useEffect handle it based on queue change.
+  }, [songQueue, toast]); // Add dependencies
 
   // --- YouTube Player Event Handlers ---
   const onPlayerReady: YouTubeProps['onReady'] = useCallback((event) => {
