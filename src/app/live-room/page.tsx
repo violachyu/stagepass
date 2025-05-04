@@ -27,10 +27,13 @@ import { searchYoutubeKaraoke } from '@/actions/youtube';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation'; // Import useSearchParams
 import { AddSongSheet } from '@/components/live-room/add-song-sheet'; // Import the new component
+import { addSongAction, fetchSongs, removeSongAction } from "@/actions/songs"
+import { upsertStage, removeStageAction } from "@/actions/stage";
 
+const POLL_INTERVAL = 5000;
 // --- Types ---
 interface Song {
-  id: number; // Keep internal ID for React keys
+  id: string; // Keep internal ID for React keys
   title: string;
   artist?: string; // Make artist optional
   user: string;
@@ -45,11 +48,6 @@ interface Participant {
 }
 
 // --- Placeholder Data ---
-const initialSongQueue: Song[] = [
-  { id: Date.now() + 1, title: 'September', artist:'Earth, Wind & Fire', user: 'Piggy' },
-  { id: Date.now() + 2, title: 'Stairway to Heaven', artist: 'Led Zeppelin', user: 'Eve' },
-];
-
 const initialParticipants: Participant[] = [
   { id: 'user1', name: 'Alice', avatar: '/avatars/alice.png', isMuted: false },
   { id: 'user2', name: 'Bob', avatar: '/avatars/bob.png', isMuted: false },
@@ -60,7 +58,7 @@ const initialParticipants: Participant[] = [
 
 // --- Component ---
 export default function LiveRoomPage() {
-  const [songQueue, setSongQueue] = useState<Song[]>(initialSongQueue);
+  const [songQueue, setSongQueue] = useState<Song[]>([]);
   const [participants, setParticipants] = useState<Participant[]>(initialParticipants);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isParticipantsSheetOpen, setIsParticipantsSheetOpen] = useState(false);
@@ -70,6 +68,7 @@ export default function LiveRoomPage() {
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null); // State for the share URL
   const asideRef = useRef<HTMLElement>(null);
+  const [stageId, setStageId] = useState<string | null>(null);
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams(); // Get URL search parameters
@@ -107,6 +106,18 @@ export default function LiveRoomPage() {
 
   }, [searchParams, router]); // Rerun if searchParams change (shouldn't typically happen without navigation)
 
+  useEffect(() => {
+    if (!roomCode) return;
+  
+    (async () => {
+      const result = await upsertStage(roomCode, "Not implement yet");
+      if (result.success) {
+        setStageId(result.id);
+      } else {
+        console.error(result.error);
+      }
+    })();
+  }, [roomCode]);
 
   useEffect(() => {
     if (songQueue.length > 0 && currentSongIndex === -1 && !currentVideoId) {
@@ -131,6 +142,42 @@ export default function LiveRoomPage() {
     // No change if currentSongIndex is valid and >= 0
   }, [songQueue, currentSongIndex, currentVideoId]);
 
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+
+    async function poll() {
+      try {
+        if (!stageId) {
+          console.error("Stage ID is missing");
+          return;
+        };
+        const serverSongs = await fetchSongs(stageId);
+        const mapped: Song[] = serverSongs.map(s => ({
+          id: s.id,
+          title: s.title,
+          artist: s.artist ?? undefined,
+          user: "Unknown",
+          videoId: s.videoId ?? undefined,
+        }));
+
+        setSongQueue(prev => {
+          const same =
+            prev.length === mapped.length &&
+            prev.every((p, i) => p.id === mapped[i].id);
+
+          return same ? prev : mapped;
+        });
+      } catch (err) {
+        console.error("poll songs error:", err);
+      }
+      timer = setTimeout(poll, POLL_INTERVAL);
+    }
+
+    poll();
+
+    return () => clearTimeout(timer);
+  }, [stageId]);
 
   useEffect(() => {
     const loadVideo = async () => {
@@ -237,27 +284,43 @@ export default function LiveRoomPage() {
     setIsQueueOpen(!isQueueOpen);
   };
 
-  const handleTerminateRoom = () => {
-    console.log("Terminating room...");
+  const handleTerminateRoom = async () => {
+    if (!stageId) return;
+    
+    const res = await removeStageAction(stageId);
     setIsTerminateDialogOpen(false);
-    toast({ title: "Room Terminated", description: "The live room has been closed." });
-    router.push('/dashboard');
-  };
+    
+    if (res.error) {
+        toast({ title: "Error", description: res.error, variant: "destructive" });
+        return;
+    }
+    
+      toast({ title: "Room Closed", description: "The live room has been deleted." });
+      router.push("/dashboard");
+    };
 
   // Callback function for adding a song from the sheet
-  const handleAddSong = useCallback((newSong: { title: string; artist?: string; videoId?: string }) => {
-     const songToAdd: Song = {
-      ...newSong,
-      id: Date.now(), // Simple unique ID using timestamp
-      user: 'You', // Placeholder, replace with actual user later
-    };
-    setSongQueue(prevQueue => [...prevQueue, songToAdd]);
-    toast({
-      title: "Song Added",
-      description: `"${songToAdd.title}" has been added to the queue.`,
-    });
-    console.log("Added song:", songToAdd);
-  }, [toast]); // Add toast as dependency
+  const handleAddSong = async (newSong: { title: string; artist?: string; videoId?: string }) => {
+    if (!stageId) {
+      toast({ title: "Error", description: "Stage init failed", variant: "destructive" });
+      return;
+    }
+    const res = await addSongAction(stageId, newSong);
+    if (res.error) {
+      toast({ title: "Error", description: res.error, variant: "destructive" })
+    } else {
+      toast({ title: "Added", description: `${newSong.title} added.` })
+      const updated = await fetchSongs(stageId);
+      setSongQueue(
+        updated.map(s => ({
+          ...s,
+          user: "You",
+          artist: s.artist ?? undefined,
+          videoId: s.videoId ?? undefined,
+        }))
+      );
+    }
+  }
 
    // Callback to handle clicking a song in the queue (Plays Immediately)
    const handlePlaySongNext = useCallback((clickedIndex: number) => {
@@ -341,67 +404,45 @@ export default function LiveRoomPage() {
 
 
     // Callback to handle removing a song from the queue
-    const handleRemoveSong = useCallback((indexToRemove: number) => {
-        // Use state updater function to get the latest queue state
-        setSongQueue(prevQueue => {
-            if (indexToRemove < 0 || indexToRemove >= prevQueue.length) {
-                console.error("Invalid index for Remove Song:", indexToRemove, "Queue Length:", prevQueue.length);
-                return prevQueue; // Return current state if index is invalid
-            }
-
-            console.log(`Removing song at index ${indexToRemove}.`);
-            const songToRemove = prevQueue[indexToRemove]; // Get song details before removal
-
-            const newQueue = prevQueue.filter((_, index) => index !== indexToRemove); // Create the new queue
-
-             // Show toast *after* figuring out the state update
-             if (songToRemove) {
-                 toast({
-                    title: "Song Removed",
-                    description: `"${songToRemove.title}" has been removed from the queue.`,
-                });
-             }
-
-             // --- Adjust currentSongIndex logic ---
-             // This needs to happen *after* the queue update is determined
-             // We need to set the *next* state for the index based on the *current* index and the removed index
-             setCurrentSongIndex(prevIndex => {
-                 if (indexToRemove === prevIndex) {
-                    // If the currently playing song is removed:
-                    console.log("Removed the currently playing song.");
-                    if (player) {
-                        player.stopVideo(); // Stop playback
-                    }
-                    setIsPlaying(false);
-                    setIsLoadingVideo(false);
-                    setCurrentVideoId(null); // Clear video ID
-
-                    // The useEffect watching songQueue change will handle starting the next song
-                    // if the queue is not empty, or resetting if it is.
-                    console.log("Letting queue change effect handle the next song.");
-                    // Since the queue length decreases, the next song (if any) will now be at the *same* index 'indexToRemove'
-                    // However, the effect listening to songQueue change is more reliable. Resetting index to -1 might be safer,
-                    // letting the effect pick the next one (index 0 if queue not empty). Let's try resetting.
-                    // return -1; // Reset index, let effect find the next one.
-                    // Alternative: If the queue still has items at this index after removal, keep it. Otherwise reset.
-                    return newQueue.length > indexToRemove ? indexToRemove : -1;
-
-
-                 } else if (indexToRemove < prevIndex) {
-                     // If a song *before* the current song is removed, the current song's index decreases by 1.
-                     console.log("Removed song before current, adjusting index.");
-                     return Math.max(0, prevIndex - 1); // Ensure index doesn't go below 0
-                 } else {
-                      // If a song *after* the current song is removed, the current index remains the same.
-                      return prevIndex;
-                 }
-             });
-
-
-             return newQueue; // Return the updated queue
-        });
-
-    }, [player, toast]); // Add dependencies
+    const handleRemoveSong = useCallback(
+        async (indexToRemove: number) => {
+          if (!stageId) return;
+      
+          setSongQueue(prevQueue => {
+            if (indexToRemove < 0 || indexToRemove >= prevQueue.length) return prevQueue;
+            return prevQueue; 
+          });
+      
+          const song = songQueue[indexToRemove];
+          if (!song) return;
+      
+          const res = await removeSongAction(song.id, stageId);
+          if (res.error) {
+            toast({ title: "Error", description: res.error, variant: "destructive" });
+            return;
+          }
+      
+          toast({ title: "Song Removed", description: `"${song.title}" removed.` });
+      
+          const updated = await fetchSongs(stageId);
+          setSongQueue(
+            updated.map(s => ({
+              id: s.id,
+              title: s.title,
+              artist: s.artist ?? undefined,
+              user: "Unknown",
+              videoId: s.videoId ?? undefined,
+            }))
+          );
+      
+          if (indexToRemove === currentSongIndex) {
+            setCurrentVideoId(null);
+            setIsPlaying(false);
+            setCurrentSongIndex(-1);
+          }
+        },
+        [songQueue, stageId, currentSongIndex, player, toast]
+      );
 
 
   // --- YouTube Player Event Handlers ---
@@ -838,5 +879,3 @@ export default function LiveRoomPage() {
     </div>
   );
 }
-
-
