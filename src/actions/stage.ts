@@ -68,6 +68,7 @@ export async function removeStageAction(stageId: string, adminUserId?: string){
     console.error("removeStageAction error:", err);
     return { error: "Remove stage failed." };
   }
+};
 
 export async function createStage(stageData: StageData) {
     console.log("[Server]DEBUG: Creating stage...")
