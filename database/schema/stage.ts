@@ -9,16 +9,18 @@ import { number, z } from "zod"
 export const stages = pgTable("stages", {
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
+    joinCode: text("join_code").notNull().unique(), 
     maxCapacity: integer().default(10),
     private: boolean("private").notNull().default(false),
     terminated: boolean("terminated").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
-    adminUserId: text("user_id")
-        .notNull()
-        .references(() => users.id, { onDelete: "cascade" })
+    //adminUserId: text("user_id")
+    //    .notNull()
+    //    .references(() => users.id, { onDelete: "cascade" })
 })
 
+/*
 export const usersRelations = relations(users, ({ many }) => ({
     stages: many(stages),
 }))
@@ -29,7 +31,7 @@ export const stagesRelations = relations(stages, ({ one }) => ({
         references: [users.id],
     }),
 }))
-
+*/
 
 export const selectUserSchema = createSelectSchema(users);
 export type User = z.infer<typeof selectUserSchema>;
