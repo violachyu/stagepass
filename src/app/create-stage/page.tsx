@@ -1,23 +1,32 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, startTransition } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from '@/components/ui/button';
-import { Settings, Users, Lock, Globe } from 'lucide-react';
+import { Settings, Users, Lock, Globe, Mic } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
-type PrivacySetting = "public" | "private";
+import { createStage } from '@/actions/stage';
+import { StageData } from '../../../database/schema/stage'
+
+export type PrivacySetting = "public" | "private";
 
 export default function CreateStagePage() {
   const router = useRouter();
   const { toast } = useToast();
+  const [stageName, setStageName] = useState<string | ''>("");
   const [maxCapacity, setMaxCapacity] = useState<number | ''>('');
   const [privacy, setPrivacy] = useState<PrivacySetting>("public");
+
+  const handleNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setStageName(value.trim() as string);
+  };
 
   const handleCapacityChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const value = event.target.value;
@@ -41,11 +50,31 @@ export default function CreateStagePage() {
       return;
     }
 
-    // TODO: Implement actual stage creation logic (e.g., API call, state update)
+    // Create Stage
+    startTransition(async () => {
+      console.log("privacy settings:", privacy);
+
+      try {
+        const stageData: StageData = {
+          name: stageName ? stageName : "Dummy", //TODO
+          maxCapacity: maxCapacity,
+          is_private: privacy == "private" ? true : false,
+          is_terminated: false,
+          adminUserId: "mockAdmin" //TODO: remove when user suth is setup
+        };
+
+        const result = await createStage(stageData);
+        console.log(result);
+
+      } catch (err) {
+        console.error("Error creating stage:", err);
+      }
+    });
+
     console.log("Creating stage with settings:", { maxCapacity, privacy });
     toast({
       title: "Stage Created",
-      description: `Your ${privacy} stage with capacity ${maxCapacity} is ready. Redirecting...`,
+      description: `${stageName} is ready. Redirecting...`,
     });
 
     // Navigate to the live room page
@@ -63,6 +92,21 @@ export default function CreateStagePage() {
           <CardDescription>Configure the settings for your new live room.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6 p-6">
+          <div className="space-y-2">
+            <Label htmlFor="stage-name" className="flex items-center text-base">
+              <Mic className="mr-2 h-5 w-5 text-muted-foreground" /> Stage Name
+            </Label>
+            <Input
+              id="stage-name"
+              type="text"
+              placeholder="Enter your stage name"
+              value={stageName}
+              onChange={handleNameChange}
+              className="bg-input text-foreground placeholder:text-muted-foreground"
+              maxLength={50}
+            />
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="max-capacity" className="flex items-center text-base">
               <Users className="mr-2 h-5 w-5 text-muted-foreground" /> Maximum Capacity
