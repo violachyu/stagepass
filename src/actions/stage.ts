@@ -13,7 +13,9 @@ import { redirect } from "next/navigation"
 import { PrivacySetting } from '@/app/create-stage/page'
 import { StageData } from '../../database/schema/stage'
 
-export async function upsertStage(roomCode: string, adminUserId: string){
+
+// export async function getStage(stageData: StageData)
+export async function upsertStage(stageData: StageData){
   // const session = await auth.api.getSession({ headers: await headers() })
   // if (!session) return { error: "Please log in." }
 
@@ -22,15 +24,15 @@ export async function upsertStage(roomCode: string, adminUserId: string){
     const [existing] = await db
       .select({ id: stages.id })
       .from(stages)
-      .where(eq(stages.joinCode, roomCode));
+      .where(eq(stages.joinCode, stageData.joinCode));
 
     if (existing) {
       return { success: true, id: existing.id };
     }
 
     const validated = insertStageSchema.parse({
-      joinCode: roomCode,
-      name: roomCode,
+      joinCode: stageData.joinCode,
+      name: stageData.name,
       //adminUserId,
     });
 
@@ -78,12 +80,104 @@ export async function createStage(stageData: StageData) {
     }
 
     try {
-        await db.insert(stages).values(stageData);
+        const [result] = await db.insert(stages)
+            .values(stageData)
+            .returning({ stageId: stages.id });
+
         console.log("[Server]DEBUG: stage created successfully");
-        return { success: true };
+        return { success: { stageId: result.stageId } };
 
     } catch (error) {
         console.log(error);
         return { error: "Failed to create stage" };
     }
 }
+
+export async function getJoinCode(stageId?: string) {
+    try {
+        if (!stageId) {
+            return { error: "stageId is required" };
+        }
+
+        const [result] = await db
+            .select()
+            .from(stages)
+            .where(eq(stages.id, stageId))
+            .limit(1);
+
+        if (!result) {
+            return { error: "Stage not found or unauthorized" };
+        }
+        
+        return { success: { joinCode: result.joinCode} };
+
+    } catch (error) {
+        return { error: "Failed to find stage" };
+    }
+}
+
+export async function getStageIdbyJoinCode(joinCode?: string){
+    if (!joinCode) {
+        return { error: "JoinCode is required" };
+    }
+
+    try {
+        const [result] = await db
+            .select()
+            .from(stages)
+            .where(eq(stages.joinCode, joinCode))
+            .limit(1);
+
+        if (!result) {
+            return { error: "Stage not found or unauthorized" };
+        }
+        
+        return { success: { stageId: result.id} };
+
+    } catch (error) {
+        return { error: "Failed to find stage" };
+    }
+
+}
+
+export async function getStageNameById(stageId?: string) {
+    try {
+        if (!stageId) {
+            return { error: "stageId is required" };
+        }
+
+        const [result] = await db
+            .select()
+            .from(stages)
+            .where(eq(stages.id, stageId))
+            .limit(1);
+
+        if (!result) {
+            return { error: "Stage not found or unauthorized" };
+        }
+        
+        return { success: { stageName: result.name } };
+
+    } catch (error) {
+        return { error: "Failed to find stage" };
+    }
+}
+
+
+/* Utils */
+// export async function requireAuth() {
+//     const session = await auth.api.getSession({
+//         headers: await headers()
+//     });
+
+//     if (!session?.user) {
+//         redirect('/auth/sign-in');
+//     }
+
+//     const userId = session?.user?.id || "ea8EcFpHfDslNKhOPTHzMThXQiW9fjhz"; //Dummy UserId
+//     const userRole = session?.user?.role || "user";
+
+//     console.log("GET USER SESSION: ", userId, userRole);
+
+//     return { userId, userRole };
+// }

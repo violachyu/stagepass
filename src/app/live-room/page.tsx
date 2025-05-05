@@ -1,8 +1,8 @@
 
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import YouTube, { YouTubePlayer, YouTubeProps } from 'react-youtube';
+import React, { useState, useEffect, useRef, useCallback, startTransition } from 'react';
+import YouTube, { YouTubeEvent, YouTubePlayer, YouTubeProps } from 'react-youtube';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
@@ -28,7 +28,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation'; // Import useSearchParams
 import { AddSongSheet } from '@/components/live-room/add-song-sheet'; // Import the new component
 import { addSongAction, fetchSongs, removeSongAction } from "@/actions/songs"
-import { upsertStage, removeStageAction } from "@/actions/stage";
+import { upsertStage, removeStageAction, getJoinCode } from "@/actions/stage";
+import stage, { StageData } from '../../../database/schema/stage'
 
 const POLL_INTERVAL = 5000;
 // --- Types ---
@@ -68,7 +69,6 @@ export default function LiveRoomPage() {
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null); // State for the share URL
   const asideRef = useRef<HTMLElement>(null);
-  const [stageId, setStageId] = useState<string | null>(null);
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams(); // Get URL search parameters
@@ -80,44 +80,47 @@ export default function LiveRoomPage() {
   const [isLoadingVideo, setIsLoadingVideo] = useState(false);
   const [currentSongIndex, setCurrentSongIndex] = useState<number>(-1); // Index in the *current* songQueue
 
-  // --- Effects ---
-  useEffect(() => {
-    const joinCodeFromUrl = searchParams.get('joinCode');
-    let finalRoomCode: string;
-
-    if (joinCodeFromUrl && /^\d{6}$/.test(joinCodeFromUrl)) {
-      // Use the code from URL if valid
-      finalRoomCode = joinCodeFromUrl;
-      console.log(`Joining room with code from URL: ${finalRoomCode}`);
-    } else {
-      // Generate a new 6-digit numeric code for creators
-      const generateRoomCode = () => Math.floor(100000 + Math.random() * 900000).toString();
-      finalRoomCode = generateRoomCode();
-      console.log(`Created new room with generated code: ${finalRoomCode}`);
-      // Optionally, update the URL without reloading if creating a new room
-      // router.replace(`/live-room?joinCode=${finalRoomCode}`, { scroll: false });
-    }
-
-    setRoomCode(finalRoomCode);
-
-    // Generate share URL based on the final room code
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    setShareUrl(`${baseUrl}/live-room?joinCode=${finalRoomCode}`);
-
-  }, [searchParams, router]); // Rerun if searchParams change (shouldn't typically happen without navigation)
-
-  useEffect(() => {
-    if (!roomCode) return;
+  const stageId = searchParams.get('stageId');
   
-    (async () => {
-      const result = await upsertStage(roomCode, "Not implement yet");
-      if (result.success) {
-        setStageId(result.id);
-      } else {
-        console.error(result.error);
+  useEffect(() => {
+    startTransition(async () => {
+      try {
+        if (!stageId) return;
+  
+        const result = await getJoinCode(stageId);
+        const joinCode = result.success?.joinCode;
+        if (!joinCode) return;
+  
+        setRoomCode(joinCode);
+        // Generate share URL
+        const baseUrl = window.location.origin;
+        setShareUrl(`${baseUrl}/live-room?stageId=${stageId}&joinCode=${joinCode}`);
+  
+        
+      } catch (error) {
+        console.error("Failed to get join code:", error);
       }
-    })();
-  }, [roomCode]);
+    });
+  }, []);
+
+  // useEffect(() => {
+  //   if (!roomCode) return;
+  
+  //   (async () => {
+  //     const stageData = {
+  //       joinCode: roomCode,
+  //       name: ""
+  //     }
+
+  //     const result = await updateStage(terminated)
+  //     const result = await upsertStage(stageData);
+  //     if (result.success) {
+  //       setStageId(result.id);
+  //     } else {
+  //       console.error(result.error);
+  //     }
+  //   })();
+  // }, [roomCode]);
 
   useEffect(() => {
     if (songQueue.length > 0 && currentSongIndex === -1 && !currentVideoId) {
@@ -446,7 +449,7 @@ export default function LiveRoomPage() {
 
 
   // --- YouTube Player Event Handlers ---
-  const onPlayerReady: YouTubeProps['onReady'] = useCallback((event) => {
+  const onPlayerReady: YouTubeProps['onReady'] = useCallback((event: YouTubeEvent<YouTubePlayer>) => {
     console.log("Player ready");
     setPlayer(event.target);
      if (currentVideoId && !isPlaying && isLoadingVideo) {
@@ -455,7 +458,7 @@ export default function LiveRoomPage() {
     }
   }, [currentVideoId, isPlaying, isLoadingVideo]); // Add dependencies
 
-  const onPlayerStateChange: YouTubeProps['onStateChange'] = useCallback((event) => {
+  const onPlayerStateChange: YouTubeProps['onStateChange'] = useCallback((event: YouTubeEvent<YouTubePlayer>) => {
     const state = event.data;
     console.log("Player state changed:", state, `(Current Index: ${currentSongIndex}, Queue Length: ${songQueue.length})`);
     if (state === YouTube.PlayerState.ENDED) {
@@ -496,7 +499,7 @@ export default function LiveRoomPage() {
     }
   }, [currentSongIndex, songQueue.length, handleRemoveSong, player, isPlaying, isLoadingVideo]); // Add dependencies
 
-  const onPlayerError: YouTubeProps['onError'] = useCallback((event) => {
+  const onPlayerError: YouTubeProps['onError'] = useCallback((event: YouTubeEvent<YouTubePlayer>) => {
     console.error(`YouTube Player Error (Code ${event.data}) for song at index ${currentSongIndex}`);
     const currentSongTitle = songQueue[currentSongIndex]?.title || "the current song";
     toast({

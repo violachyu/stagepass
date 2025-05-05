@@ -11,7 +11,7 @@ import { Settings, Users, Lock, Globe, Mic } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 
-import { createStage } from '@/actions/stage';
+import { createStage, getJoinCode } from '@/actions/stage';
 import { StageData } from '../../../database/schema/stage'
 
 export type PrivacySetting = "public" | "private";
@@ -50,36 +50,36 @@ export default function CreateStagePage() {
       return;
     }
 
+    // Generate unique join code for stage
+    const generateJoinCode = () => Math.floor(100000 + Math.random() * 900000).toString();
+    const joinCode = generateJoinCode();
+
     // Create Stage
     startTransition(async () => {
-      console.log("privacy settings:", privacy);
-
       try {
         const stageData: StageData = {
-          name: stageName ? stageName : "Dummy", //TODO
+          name: stageName ? stageName : "Dummy",
           maxCapacity: maxCapacity,
-          is_private: privacy == "private" ? true : false,
+          joinCode: joinCode,
+          is_private: privacy === "private",
           is_terminated: false,
-          adminUserId: "mockAdmin" //TODO: remove when user suth is setup
+          // adminUserId: "mockAdmin"
         };
 
         const result = await createStage(stageData);
-        console.log(result);
+        const stageId = result.success?.stageId;
 
+        toast({
+          title: "Stage Created",
+          description: `${stageName} is ready. Redirecting...`,
+        });
+        // Navigate to the live room page
+        router.push(`/live-room?stageId=${stageId}&&joinCode=${joinCode}`);
+        
       } catch (err) {
         console.error("Error creating stage:", err);
       }
     });
-
-    console.log("Creating stage with settings:", { maxCapacity, privacy });
-    toast({
-      title: "Stage Created",
-      description: `${stageName} is ready. Redirecting...`,
-    });
-
-    // Navigate to the live room page
-    // In a real app, you'd likely pass the stage ID or config in the URL or state
-    router.push('/live-room');
   };
 
   return (
@@ -134,18 +134,18 @@ export default function CreateStagePage() {
             >
               <div className="flex items-center space-x-2 rounded-md border border-border p-3 hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-accent">
                 <RadioGroupItem value="public" id="public" />
-                 <Globe className="h-4 w-4 text-muted-foreground" />
+                <Globe className="h-4 w-4 text-muted-foreground" />
                 <Label htmlFor="public" className="font-medium cursor-pointer">Public</Label>
                 <p className="text-xs text-muted-foreground flex-1 text-right sm:text-left sm:flex-none">Anyone can join</p>
               </div>
               <div className="flex items-center space-x-2 rounded-md border border-border p-3 hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer has-[:checked]:border-primary has-[:checked]:bg-accent">
                 <RadioGroupItem value="private" id="private" />
-                 <Lock className="h-4 w-4 text-muted-foreground" />
+                <Lock className="h-4 w-4 text-muted-foreground" />
                 <Label htmlFor="private" className="font-medium cursor-pointer">Private</Label>
-                 <p className="text-xs text-muted-foreground flex-1 text-right sm:text-left sm:flex-none">Only invited users</p>
+                <p className="text-xs text-muted-foreground flex-1 text-right sm:text-left sm:flex-none">Only invited users</p>
               </div>
             </RadioGroup>
-             <p className="text-sm text-muted-foreground">Control who can join your stage.</p>
+            <p className="text-sm text-muted-foreground">Control who can join your stage.</p>
           </div>
 
           <Button
