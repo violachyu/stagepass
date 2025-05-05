@@ -16,8 +16,6 @@
     "db:migrate": "drizzle-kit migrate",
     "db:migrate-production": "NODE_ENV=production drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "lint": "next lint",
-    "lint:fix": "next lint --fix",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
