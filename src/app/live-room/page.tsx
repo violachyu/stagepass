@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, startTransition } from 'react';
 import YouTube, { YouTubeEvent, YouTubePlayer, YouTubeProps } from 'react-youtube';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -69,7 +69,6 @@ export default function LiveRoomPage() {
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null); // State for the share URL
   const asideRef = useRef<HTMLElement>(null);
-  const [stageId, setStageId] = useState<string | null>(null);
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams(); // Get URL search parameters
@@ -81,40 +80,28 @@ export default function LiveRoomPage() {
   const [isLoadingVideo, setIsLoadingVideo] = useState(false);
   const [currentSongIndex, setCurrentSongIndex] = useState<number>(-1); // Index in the *current* songQueue
 
-  // --- Effects ---
-  useEffect(() => {
-    const stageId = searchParams.get('stageId');
-    
-    if (!stageId) {
-      console.error("stageId is required");
-      return;
-    } else {
-      setStageId(stageId as string);
-    }
+  const stageId = searchParams.get('stageId');
   
-    const accessStagebyJoinCode = async () => {
+  useEffect(() => {
+    startTransition(async () => {
       try {
+        if (!stageId) return;
+  
         const result = await getJoinCode(stageId);
-
-        if ('joinCode' in result && result.joinCode) {
-          const joinCode = result.joinCode.toString();
-          setRoomCode(joinCode);
-          // Generate share URL
-          const baseUrl = window.location.origin;
-          setShareUrl(`${baseUrl}/live-room?stageId=${stageId}&joinCode=${joinCode}`);
-
-        } else if ('error' in result) {
-          console.error("Error getting stage:", result.error);
-        }
+        const joinCode = result.success?.joinCode;
+        if (!joinCode) return;
+  
+        setRoomCode(joinCode);
+        // Generate share URL
+        const baseUrl = window.location.origin;
+        setShareUrl(`${baseUrl}/live-room?stageId=${stageId}&joinCode=${joinCode}`);
+  
         
       } catch (error) {
         console.error("Failed to get join code:", error);
       }
-    };
-  
-    accessStagebyJoinCode();
-  
-  }, [searchParams]); // Removed router from dependencies if not used
+    });
+  }, []);
 
   // useEffect(() => {
   //   if (!roomCode) return;
