@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import YouTube, { YouTubePlayer, YouTubeProps } from 'react-youtube';
+import YouTube, { YouTubeEvent, YouTubePlayer, YouTubeProps } from 'react-youtube';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
@@ -201,69 +201,59 @@ export default function LiveRoomPage() {
         const song = songQueue[currentSongIndex];
         console.log(`Attempting to load song at index ${currentSongIndex}: "${song.title}"`);
 
-        let videoIdToLoad = song.videoId; // Use pre-fetched ID if available
+        // let videoIdToLoad = song.videoId; // Use pre-fetched ID if available
+        console.log(`Searching YouTube for: "${song.title}" by ${song.artist || 'Unknown Artist'}`);
+        try {
+          const videoIdToLoad = await searchYoutubeKaraoke({ title: song.title, artist: song.artist });
+            // Update the song object in the queue with the fetched ID for caching
+          if (videoIdToLoad) {
+              // Use functional update to avoid stale state issues if multiple updates happen quickly
+                setSongQueue(prevQueue => prevQueue.map((s, idx) =>
+                  idx === currentSongIndex ? { ...s, videoId: videoIdToLoad } : s
+                ));
 
-        if (!videoIdToLoad) {
-          console.log(`Searching YouTube for: "${song.title}" by ${song.artist || 'Unknown Artist'}`);
-          try {
-            videoIdToLoad = await searchYoutubeKaraoke({ title: song.title, artist: song.artist });
-             // Update the song object in the queue with the fetched ID for caching
-            if (videoIdToLoad) {
-                // Use functional update to avoid stale state issues if multiple updates happen quickly
-                 setSongQueue(prevQueue => prevQueue.map((s, idx) =>
-                    idx === currentSongIndex ? { ...s, videoId: videoIdToLoad } : s
-                 ));
-            }
-          } catch (error) {
-             console.error("Error during YouTube search:", error);
-             // Use toast inside try-catch or ensure it's handled outside if possible
+              if (currentVideoId !== videoIdToLoad || !player) {
+                setCurrentVideoId(videoIdToLoad);
+                console.log(`Setting video ID: ${videoIdToLoad} for song "${song.title}"`);
+              } else {
+                    // If the ID is the same, and player exists, it might be paused or ended.
+                    // Let state change handlers manage playback.
+                    console.log(`Video ID ${videoIdToLoad} already loaded. Player state will manage playback.`);
+                    // Ensure loading is false if we're not actually changing the video
+                    setIsLoadingVideo(false);
+              }
+          } else {
               toast({
-                 variant: "destructive",
-                 title: "Search Error",
-                 description: `Error searching for "${song.title}". Skipping song.`,
-             });
-            // Skip the song if search fails by removing it
-             handleRemoveSong(currentSongIndex); // Use the remove function
-            setIsLoadingVideo(false);
-            return; // Exit effect early
-          }
-        } else {
-            console.log(`Using pre-fetched videoId: ${videoIdToLoad}`);
-        }
-
-
-        if (videoIdToLoad) {
-            // Only update if the video ID is different from the current one
-            // Or if it's the same ID but we are explicitly trying to load it (e.g., after skip/reorder)
-            if (currentVideoId !== videoIdToLoad || !player) {
-                 setCurrentVideoId(videoIdToLoad);
-                 console.log(`Setting video ID: ${videoIdToLoad} for song "${song.title}"`);
-            } else {
-                 // If the ID is the same, and player exists, it might be paused or ended.
-                 // Let state change handlers manage playback.
-                 console.log(`Video ID ${videoIdToLoad} already loaded. Player state will manage playback.`);
-                 // Ensure loading is false if we're not actually changing the video
-                 setIsLoadingVideo(false);
-            }
-        } else {
-             toast({
                 variant: "destructive",
                 title: "Video Not Found",
                 description: `Could not find a karaoke video for "${song.title}". Skipping song.`,
             });
             console.log(`No video found for "${song.title}", skipping.`);
             // Skip this song by removing it
-             handleRemoveSong(currentSongIndex); // Use the remove function
+            handleRemoveSong(currentSongIndex); // Use the remove function
             setIsLoadingVideo(false); // Ensure loading stops
+          }
+        } catch (error) {
+            console.error("Error during YouTube search:", error);
+            // Use toast inside try-catch or ensure it's handled outside if possible
+            toast({
+                variant: "destructive",
+                title: "Search Error",
+                description: `Error searching for "${song.title}". Skipping song.`,
+            });
+          // Skip the song if search fails by removing it
+            handleRemoveSong(currentSongIndex); // Use the remove function
+          setIsLoadingVideo(false);
+          return; // Exit effect early
         }
       } else if (currentSongIndex === -1 && songQueue.length === 0) {
-         // Queue is empty and index is reset, clear video
-         if (currentVideoId) {
-            console.log("Queue empty, clearing video ID.");
-            setCurrentVideoId(null);
-            setIsPlaying(false);
-            setIsLoadingVideo(false);
-         }
+        // Queue is empty and index is reset, clear video
+        if (currentVideoId) {
+          console.log("Queue empty, clearing video ID.");
+          setCurrentVideoId(null);
+          setIsPlaying(false);
+          setIsLoadingVideo(false);
+        }
       }
     };
 
@@ -461,7 +451,7 @@ export default function LiveRoomPage() {
 
 
   // --- YouTube Player Event Handlers ---
-  const onPlayerReady: YouTubeProps['onReady'] = useCallback((event) => {
+  const onPlayerReady: YouTubeProps['onReady'] = useCallback((event: YouTubeEvent<YouTubePlayer>) => {
     console.log("Player ready");
     setPlayer(event.target);
      if (currentVideoId && !isPlaying && isLoadingVideo) {
@@ -470,7 +460,7 @@ export default function LiveRoomPage() {
     }
   }, [currentVideoId, isPlaying, isLoadingVideo]); // Add dependencies
 
-  const onPlayerStateChange: YouTubeProps['onStateChange'] = useCallback((event) => {
+  const onPlayerStateChange: YouTubeProps['onStateChange'] = useCallback((event: YouTubeEvent<YouTubePlayer>) => {
     const state = event.data;
     console.log("Player state changed:", state, `(Current Index: ${currentSongIndex}, Queue Length: ${songQueue.length})`);
     if (state === YouTube.PlayerState.ENDED) {
@@ -511,7 +501,7 @@ export default function LiveRoomPage() {
     }
   }, [currentSongIndex, songQueue.length, handleRemoveSong, player, isPlaying, isLoadingVideo]); // Add dependencies
 
-  const onPlayerError: YouTubeProps['onError'] = useCallback((event) => {
+  const onPlayerError: YouTubeProps['onError'] = useCallback((event: YouTubeEvent<YouTubePlayer>) => {
     console.error(`YouTube Player Error (Code ${event.data}) for song at index ${currentSongIndex}`);
     const currentSongTitle = songQueue[currentSongIndex]?.title || "the current song";
     toast({
