@@ -116,6 +116,53 @@ export async function getJoinCode(stageId?: string) {
     }
 }
 
+export async function getStageIdbyJoinCode(joinCode?: string){
+    if (!joinCode) {
+        return { error: "JoinCode is required" };
+    }
+
+    try {
+        const [result] = await db
+            .select()
+            .from(stages)
+            .where(eq(stages.joinCode, joinCode))
+            .limit(1);
+
+        if (!result) {
+            return { error: "Stage not found or unauthorized" };
+        }
+        
+        return { success: { stageId: result.id} };
+
+    } catch (error) {
+        return { error: "Failed to find stage" };
+    }
+
+}
+
+export async function getStageNameById(stageId?: string) {
+    try {
+        if (!stageId) {
+            return { error: "stageId is required" };
+        }
+
+        const [result] = await db
+            .select()
+            .from(stages)
+            .where(eq(stages.id, stageId))
+            .limit(1);
+
+        if (!result) {
+            return { error: "Stage not found or unauthorized" };
+        }
+        
+        return { success: { stageName: result.name } };
+
+    } catch (error) {
+        return { error: "Failed to find stage" };
+    }
+}
+
 
 /* Utils */
 // export async function requireAuth() {
