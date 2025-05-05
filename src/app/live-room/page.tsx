@@ -28,7 +28,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation'; // Import useSearchParams
 import { AddSongSheet } from '@/components/live-room/add-song-sheet'; // Import the new component
 import { addSongAction, fetchSongs, removeSongAction } from "@/actions/songs"
-import { upsertStage, removeStageAction } from "@/actions/stage";
+import { upsertStage, removeStageAction, getJoinCode } from "@/actions/stage";
+import stage, { StageData } from '../../../database/schema/stage'
 
 const POLL_INTERVAL = 5000;
 // --- Types ---
@@ -82,42 +83,56 @@ export default function LiveRoomPage() {
 
   // --- Effects ---
   useEffect(() => {
-    const joinCodeFromUrl = searchParams.get('joinCode');
-    let finalRoomCode: string;
-
-    if (joinCodeFromUrl && /^\d{6}$/.test(joinCodeFromUrl)) {
-      // Use the code from URL if valid
-      finalRoomCode = joinCodeFromUrl;
-      console.log(`Joining room with code from URL: ${finalRoomCode}`);
-    } else {
-      // Generate a new 6-digit numeric code for creators
-      const generateRoomCode = () => Math.floor(100000 + Math.random() * 900000).toString();
-      finalRoomCode = generateRoomCode();
-      console.log(`Created new room with generated code: ${finalRoomCode}`);
-      // Optionally, update the URL without reloading if creating a new room
-      // router.replace(`/live-room?joinCode=${finalRoomCode}`, { scroll: false });
+    const stageId = searchParams.get('stageId');
+    
+    if (!stageId) {
+      console.error("stageId is required");
+      return;
     }
-
-    setRoomCode(finalRoomCode);
-
-    // Generate share URL based on the final room code
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    setShareUrl(`${baseUrl}/live-room?joinCode=${finalRoomCode}`);
-
-  }, [searchParams, router]); // Rerun if searchParams change (shouldn't typically happen without navigation)
-
-  useEffect(() => {
-    if (!roomCode) return;
   
-    (async () => {
-      const result = await upsertStage(roomCode, "Not implement yet");
-      if (result.success) {
-        setStageId(result.id);
-      } else {
-        console.error(result.error);
+    const getAndSetJoinCode = async () => {
+      try {
+        const result = await getJoinCode(stageId);
+
+        if ('joinCode' in result && result.joinCode) {
+          const joinCode = result.joinCode.toString();
+          setRoomCode(joinCode);
+          // Generate share URL
+          const baseUrl = window.location.origin;
+          setShareUrl(`${baseUrl}/live-room?stageId=${stageId}&joinCode=${joinCode}`);
+
+        } else if ('error' in result) {
+          console.error("Error getting stage:", result.error);
+        }
+  
+        
+      } catch (error) {
+        console.error("Failed to get join code:", error);
       }
-    })();
-  }, [roomCode]);
+    };
+  
+    getAndSetJoinCode();
+  
+  }, [searchParams]); // Removed router from dependencies if not used
+
+  // useEffect(() => {
+  //   if (!roomCode) return;
+  
+  //   (async () => {
+  //     const stageData = {
+  //       joinCode: roomCode,
+  //       name: ""
+  //     }
+
+  //     const result = await updateStage(terminated)
+  //     const result = await upsertStage(stageData);
+  //     if (result.success) {
+  //       setStageId(result.id);
+  //     } else {
+  //       console.error(result.error);
+  //     }
+  //   })();
+  // }, [roomCode]);
 
   useEffect(() => {
     if (songQueue.length > 0 && currentSongIndex === -1 && !currentVideoId) {
