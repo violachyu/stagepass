@@ -88,9 +88,11 @@ export default function LiveRoomPage() {
     if (!stageId) {
       console.error("stageId is required");
       return;
+    } else {
+      setStageId(stageId as string);
     }
   
-    const getAndSetJoinCode = async () => {
+    const accessStagebyJoinCode = async () => {
       try {
         const result = await getJoinCode(stageId);
 
@@ -104,14 +106,13 @@ export default function LiveRoomPage() {
         } else if ('error' in result) {
           console.error("Error getting stage:", result.error);
         }
-  
         
       } catch (error) {
         console.error("Failed to get join code:", error);
       }
     };
   
-    getAndSetJoinCode();
+    accessStagebyJoinCode();
   
   }, [searchParams]); // Removed router from dependencies if not used
 

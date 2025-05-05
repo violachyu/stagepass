@@ -67,22 +67,17 @@ export default function CreateStagePage() {
         };
 
         const result = await createStage(stageData);
+        const stageId = result.success?.stageId;
 
-        if ('stageId' in result && result.stageId) {
-          console.log(`Stage Created with ID: ${result.stageId}`);
-          toast({
-            title: "Stage Created",
-            description: `${stageName} is ready. Redirecting...`,
-          });
-
-          // Navigate to the live room page
-          router.push(`/live-room/${result.stageId}?joinCode=${joinCode}`);
-
-        } else if ('error' in result) {
-          console.error("Error creating stage:", result.error);
-        }
+        toast({
+          title: "Stage Created",
+          description: `${stageName} is ready. Redirecting...`,
+        });
+        // Navigate to the live room page
+        router.push(`/live-room?stageId=${stageId}&&joinCode=${joinCode}`);
+        
       } catch (err) {
-        console.error("An unexpected error occurred");
+        console.error("Error creating stage:", err);
       }
     });
   };
