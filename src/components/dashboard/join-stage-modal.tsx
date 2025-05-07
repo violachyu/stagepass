@@ -85,7 +85,7 @@ const JoinStageModal: React.FC<JoinStageModalProps> = ({ isOpen, onOpenChange })
 
     } catch (error: any) {
       // --- Error Handling ---
-      console.error("Failed to join stage:", error.message);
+      // console.error("Failed to join stage:", error.message);
       toast({
         variant: "destructive",
         title: "Failed to Join",

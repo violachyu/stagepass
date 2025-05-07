@@ -1,8 +1,9 @@
 
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback, startTransition } from 'react';
+import React, { useState, useEffect, useRef, useCallback, startTransition, Suspense } from 'react';
 import YouTube, { YouTubeEvent, YouTubePlayer, YouTubeProps } from 'react-youtube';
+import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
@@ -58,7 +59,15 @@ const initialParticipants: Participant[] = [
 ];
 
 // --- Component ---
-export default function LiveRoomPage() {
+export default function LoadingPage() {
+  return (
+    <Suspense fallback={<p>Loading...</p>}>
+      <LiveRoomPage />
+    </Suspense>
+  );
+}
+
+function LiveRoomPage() {
   const [songQueue, setSongQueue] = useState<Song[]>([]);
   const [participants, setParticipants] = useState<Participant[]>(initialParticipants);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -71,7 +80,7 @@ export default function LiveRoomPage() {
   const asideRef = useRef<HTMLElement>(null);
   const { toast } = useToast();
   const router = useRouter();
-  const searchParams = useSearchParams(); // Get URL search parameters
+  // const [searchParams, setSearchParams] = useSearchParams();
 
   // YouTube Player State
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
@@ -80,8 +89,36 @@ export default function LiveRoomPage() {
   const [isLoadingVideo, setIsLoadingVideo] = useState(false);
   const [currentSongIndex, setCurrentSongIndex] = useState<number>(-1); // Index in the *current* songQueue
 
-  const stageId = searchParams.get('stageId');
+  // Take 1
+  // Deployment error: URL search params, ref: https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout
+  // function Search(){
+  // useEffect(() => {
+    // const _searchParams = useSearchParams();
+    // setSearchParams(_searchParams);
+    // return <input placeholder="Search..." />
+  // }, []);
+  // }
   
+  // Take 2
+  // const urlParams = new URLSearchParams(window.location.search);
+  // const stageId = urlParams.get("stageId"); 
+
+  // Take 3
+  // const searchParams = useSearchParams(); // Client-side URLSearchParams
+  // const [urlParams, setUrlParams] = useState<Record<string, string>>({});
+  // useEffect(() => {
+  //   const params: Record<string, string> = {};
+  //   searchParams.forEach((value, key) => {
+  //     params[key] = value;
+  //   });
+  //   setUrlParams(params);
+  // }, [searchParams]);
+
+  // const stageId = urlParams['stageId'];
+  const searchParams = useSearchParams();
+  const stageId = searchParams.get('stageId');
+  console.log(`[Client] DEBUG: ${stageId}`);
+
   useEffect(() => {
     startTransition(async () => {
       try {
@@ -569,7 +606,9 @@ export default function LiveRoomPage() {
 
   // --- JSX ---
   return (
+    
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
+      {/* <Suspense> */}
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col p-4 md:p-6 overflow-hidden"> {/* Ensure main area can handle overflow if needed */}
         <header className="flex justify-between items-center mb-4 flex-shrink-0">
@@ -879,6 +918,7 @@ export default function LiveRoomPage() {
         onOpenChange={setIsAddSongSheetOpen}
         onSongAdded={handleAddSong}
       />
+      {/* </Suspense> */}
     </div>
   );
 }

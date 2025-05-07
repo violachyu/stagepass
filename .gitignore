@@ -3,7 +3,7 @@
 .env
 
 # db scripts
-database/migrations
+# database/migrations
 
 # dependencies
 /node_modules

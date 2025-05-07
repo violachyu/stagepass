@@ -25,6 +25,9 @@ export const auth = betterAuth({
     emailAndPassword: {
         enabled: true
     },
+    trustedOrigins: [
+        "https://stagepass-6oyk-git-hotfix-vcs-projects-78623cb5.vercel.app"
+    ], 
     plugins: [
         admin(),
         nextCookies() // keep this last in `plugins` array
