@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, startTransition } from "react";
+import React, { useState, useEffect, startTransition, Suspense } from "react";
 import { Menu, Search, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,7 +27,16 @@ interface Song {
   videoId?: string; // Optional: Store pre-fetched video ID
 }
 
-export default function UserPage() {
+// Fix: useSearchParam() rendering issue
+export default function LoadingPage() {
+  return (
+    <Suspense fallback={<p>Loading...</p>}>
+      <UserPage />
+    </Suspense>
+  );
+}
+
+function UserPage() {
   const [songQueue, setSongQueue] = useState<Song[]>([]);
   const [listOpen, setListOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
