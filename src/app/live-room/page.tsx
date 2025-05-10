@@ -30,6 +30,7 @@ import { useRouter, useSearchParams } from 'next/navigation'; // Import useSearc
 import { AddSongSheet } from '@/components/live-room/add-song-sheet'; // Import the new component
 import { addSongAction, fetchSongs, removeSongAction } from "@/actions/songs"
 import { upsertStage, removeStageAction, getJoinCode } from "@/actions/stage";
+import { fetchUsers } from "@/actions/users";
 import stage, { StageData } from '../../../database/schema/stage'
 
 const POLL_INTERVAL = 5000;
@@ -48,16 +49,6 @@ interface Participant {
   avatar: string;
   isMuted: boolean;
 }
-
-// --- Placeholder Data ---
-const initialParticipants: Participant[] = [
-  { id: 'user1', name: 'Alice', avatar: '/avatars/alice.png', isMuted: false },
-  { id: 'user2', name: 'Bob', avatar: '/avatars/bob.png', isMuted: false },
-  { id: 'user3', name: 'Charlie', avatar: '/avatars/charlie.png', isMuted: true },
-  { id: 'user4', name: 'David', avatar: '/avatars/david.png', isMuted: false },
-  { id: 'user5', name: 'Eve', avatar: '/avatars/eve.png', isMuted: false },
-];
-
 // --- Component ---
 export default function LoadingPage() {
   return (
@@ -69,7 +60,7 @@ export default function LoadingPage() {
 
 function LiveRoomPage() {
   const [songQueue, setSongQueue] = useState<Song[]>([]);
-  const [participants, setParticipants] = useState<Participant[]>(initialParticipants);
+  const [participants, setParticipants] = useState<Participant[]>([]);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isParticipantsSheetOpen, setIsParticipantsSheetOpen] = useState(false);
   const [isTerminateDialogOpen, setIsTerminateDialogOpen] = useState(false);
@@ -216,6 +207,30 @@ function LiveRoomPage() {
 
     poll();
 
+    return () => clearTimeout(timer);
+  }, [stageId]);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+  
+    async function pollUsers() {
+      try {
+        if (!stageId) return;
+        const fetchedUsers = await fetchUsers(stageId);
+        setParticipants(fetchedUsers.map(u => ({
+          id: u.id,
+          name: u.name,
+          avatar: ``,
+          isMuted: true
+        })));
+      } catch (error) {
+        console.error("poll users error:", error);
+      }
+      timer = setTimeout(pollUsers, POLL_INTERVAL);
+    }
+  
+    pollUsers();
+  
     return () => clearTimeout(timer);
   }, [stageId]);
 
