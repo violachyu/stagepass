@@ -46,22 +46,11 @@ const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onOpenChange }) => {
   const handleGoogleSignIn = async () => {
     try {
       setIsLoading(true);
-      // Use Better Auth's Google sign-in with proper error handling
-      const { data, error } = await authClient.signIn.social({ provider: "google" });
-      
-      // Check if there was an error during Google sign-in
-      if (error) {
-        handleFailedAuth(error);
-        return;
-      }
-      
-      // Only proceed if authentication was successful
-      if (data) {
-        handleSuccessfulAuth();
-      } else {
-        // Handle case where neither error nor data was returned
-        handleFailedAuth({ message: "Google authentication failed. Please try again." });
-      }
+      await authClient.signIn.social({ 
+        provider: "google",
+        callbackURL: "/dashboard",
+        newUserCallbackURL: "/dashboard"
+      });
     } catch (error) {
       handleFailedAuth(error);
     } finally {

@@ -17,7 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from '@/hooks/use-toast';
 import { LogIn, X, Loader2 } from 'lucide-react'; // Added Loader2
-import { getStageIdbyJoinCode } from '@/actions/stage';
+import { joinStageWithCode } from "@/actions/stage";
 
 interface JoinStageModalProps {
   isOpen: boolean;
@@ -61,7 +61,7 @@ const JoinStageModal: React.FC<JoinStageModalProps> = ({ isOpen, onOpenChange })
     console.log("Attempting to join stage:", { preferredName: trimmedName, joinCode: trimmedCode });
 
     try {
-      const result = await getStageIdbyJoinCode(trimmedCode);
+      const result = await joinStageWithCode(trimmedCode);
       const stageId = result.success?.stageId;
 
       if (!stageId) {

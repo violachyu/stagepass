@@ -12,6 +12,8 @@ import { users } from "../../database/schema"
 import { redirect } from "next/navigation"
 import { PrivacySetting } from '@/app/create-stage/page'
 import { StageData } from '../../database/schema/stage'
+import { auth } from "@/lib/auth";
+import { assignUserToStage } from "@/actions/users";
 
 
 // export async function getStage(stageData: StageData)
@@ -163,6 +165,20 @@ export async function getStageNameById(stageId?: string) {
     }
 }
 
+export async function joinStageWithCode(joinCode: string) {
+    const session = await auth.api.getSession({
+        headers: await headers()
+        });
+    if (!session) return { error: "Please log in." };
+
+    const stageId = await getStageIdbyJoinCode(joinCode);
+    if (!stageId?.success?.stageId) return { error: "Invalid code" };
+
+    const res = await assignUserToStage(session.user.id, stageId.success.stageId);
+    if (res.error) return { error: res.error };
+
+    return { success: { stageId: stageId.success.stageId } };
+}
 
 /* Utils */
 // export async function requireAuth() {
