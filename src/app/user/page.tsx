@@ -15,7 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { AddSongSheet } from "@/components/live-room/add-song-sheet";
 
 import { fetchSongs, addSongAction } from "@/actions/songs";
-import { getStageNameById } from "@/actions/stage";
+import { getStageNameById, joinStageWithCode } from "@/actions/stage";
 import { useToast } from "@/hooks/use-toast";
 import { useSearchParams } from "next/navigation";
 
@@ -53,13 +53,16 @@ function UserPage() {
     
     startTransition(async () => {
       try {
-        if (!stageId) return;
+        if (!stageId || !joinCode) return;
   
         const result = await getStageNameById(stageId);
         const stageName = result.success?.stageName;
         if (!stageName) return;
         setStageName(stageName);
         
+        // Add QRcode_user to stage
+        const _ = await joinStageWithCode(joinCode);
+
       } catch (error) {
         console.error("Failed to get stage name:", error);
       }
