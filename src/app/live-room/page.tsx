@@ -1,8 +1,9 @@
 
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import YouTube, { YouTubePlayer, YouTubeProps } from 'react-youtube';
+import React, { useState, useEffect, useRef, useCallback, startTransition, Suspense } from 'react';
+import YouTube, { YouTubeEvent, YouTubePlayer, YouTubeProps } from 'react-youtube';
+import { useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogClose } from '@/components/ui/dialog';
@@ -28,7 +29,8 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter, useSearchParams } from 'next/navigation'; // Import useSearchParams
 import { AddSongSheet } from '@/components/live-room/add-song-sheet'; // Import the new component
 import { addSongAction, fetchSongs, removeSongAction } from "@/actions/songs"
-import { upsertStage, removeStageAction } from "@/actions/stage";
+import { upsertStage, removeStageAction, getJoinCode } from "@/actions/stage";
+import stage, { StageData } from '../../../database/schema/stage'
 
 const POLL_INTERVAL = 5000;
 // --- Types ---
@@ -57,7 +59,15 @@ const initialParticipants: Participant[] = [
 ];
 
 // --- Component ---
-export default function LiveRoomPage() {
+export default function LoadingPage() {
+  return (
+    <Suspense fallback={<p>Loading...</p>}>
+      <LiveRoomPage />
+    </Suspense>
+  );
+}
+
+function LiveRoomPage() {
   const [songQueue, setSongQueue] = useState<Song[]>([]);
   const [participants, setParticipants] = useState<Participant[]>(initialParticipants);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
@@ -68,10 +78,9 @@ export default function LiveRoomPage() {
   const [roomCode, setRoomCode] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null); // State for the share URL
   const asideRef = useRef<HTMLElement>(null);
-  const [stageId, setStageId] = useState<string | null>(null);
   const { toast } = useToast();
   const router = useRouter();
-  const searchParams = useSearchParams(); // Get URL search parameters
+  // const [searchParams, setSearchParams] = useSearchParams();
 
   // YouTube Player State
   const [currentVideoId, setCurrentVideoId] = useState<string | null>(null);
@@ -80,44 +89,75 @@ export default function LiveRoomPage() {
   const [isLoadingVideo, setIsLoadingVideo] = useState(false);
   const [currentSongIndex, setCurrentSongIndex] = useState<number>(-1); // Index in the *current* songQueue
 
-  // --- Effects ---
-  useEffect(() => {
-    const joinCodeFromUrl = searchParams.get('joinCode');
-    let finalRoomCode: string;
-
-    if (joinCodeFromUrl && /^\d{6}$/.test(joinCodeFromUrl)) {
-      // Use the code from URL if valid
-      finalRoomCode = joinCodeFromUrl;
-      console.log(`Joining room with code from URL: ${finalRoomCode}`);
-    } else {
-      // Generate a new 6-digit numeric code for creators
-      const generateRoomCode = () => Math.floor(100000 + Math.random() * 900000).toString();
-      finalRoomCode = generateRoomCode();
-      console.log(`Created new room with generated code: ${finalRoomCode}`);
-      // Optionally, update the URL without reloading if creating a new room
-      // router.replace(`/live-room?joinCode=${finalRoomCode}`, { scroll: false });
-    }
-
-    setRoomCode(finalRoomCode);
-
-    // Generate share URL based on the final room code
-    const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-    setShareUrl(`${baseUrl}/live-room?joinCode=${finalRoomCode}`);
-
-  }, [searchParams, router]); // Rerun if searchParams change (shouldn't typically happen without navigation)
-
-  useEffect(() => {
-    if (!roomCode) return;
+  // Take 1
+  // Deployment error: URL search params, ref: https://nextjs.org/docs/messages/missing-suspense-with-csr-bailout
+  // function Search(){
+  // useEffect(() => {
+    // const _searchParams = useSearchParams();
+    // setSearchParams(_searchParams);
+    // return <input placeholder="Search..." />
+  // }, []);
+  // }
   
-    (async () => {
-      const result = await upsertStage(roomCode, "Not implement yet");
-      if (result.success) {
-        setStageId(result.id);
-      } else {
-        console.error(result.error);
+  // Take 2
+  // const urlParams = new URLSearchParams(window.location.search);
+  // const stageId = urlParams.get("stageId"); 
+
+  // Take 3
+  // const searchParams = useSearchParams(); // Client-side URLSearchParams
+  // const [urlParams, setUrlParams] = useState<Record<string, string>>({});
+  // useEffect(() => {
+  //   const params: Record<string, string> = {};
+  //   searchParams.forEach((value, key) => {
+  //     params[key] = value;
+  //   });
+  //   setUrlParams(params);
+  // }, [searchParams]);
+
+  // const stageId = urlParams['stageId'];
+  const searchParams = useSearchParams();
+  const stageId = searchParams.get('stageId');
+  console.log(`[Client] DEBUG: ${stageId}`);
+
+  useEffect(() => {
+    startTransition(async () => {
+      try {
+        if (!stageId) return;
+  
+        const result = await getJoinCode(stageId);
+        const joinCode = result.success?.joinCode;
+        if (!joinCode) return;
+  
+        setRoomCode(joinCode);
+        // Generate share URL
+        const baseUrl = window.location.origin;
+        setShareUrl(`${baseUrl}/live-room?stageId=${stageId}&joinCode=${joinCode}`);
+  
+        
+      } catch (error) {
+        console.error("Failed to get join code:", error);
       }
-    })();
-  }, [roomCode]);
+    });
+  }, []);
+
+  // useEffect(() => {
+  //   if (!roomCode) return;
+  
+  //   (async () => {
+  //     const stageData = {
+  //       joinCode: roomCode,
+  //       name: ""
+  //     }
+
+  //     const result = await updateStage(terminated)
+  //     const result = await upsertStage(stageData);
+  //     if (result.success) {
+  //       setStageId(result.id);
+  //     } else {
+  //       console.error(result.error);
+  //     }
+  //   })();
+  // }, [roomCode]);
 
   useEffect(() => {
     if (songQueue.length > 0 && currentSongIndex === -1 && !currentVideoId) {
@@ -446,7 +486,7 @@ export default function LiveRoomPage() {
 
 
   // --- YouTube Player Event Handlers ---
-  const onPlayerReady: YouTubeProps['onReady'] = useCallback((event) => {
+  const onPlayerReady: YouTubeProps['onReady'] = useCallback((event: YouTubeEvent<YouTubePlayer>) => {
     console.log("Player ready");
     setPlayer(event.target);
      if (currentVideoId && !isPlaying && isLoadingVideo) {
@@ -455,7 +495,7 @@ export default function LiveRoomPage() {
     }
   }, [currentVideoId, isPlaying, isLoadingVideo]); // Add dependencies
 
-  const onPlayerStateChange: YouTubeProps['onStateChange'] = useCallback((event) => {
+  const onPlayerStateChange: YouTubeProps['onStateChange'] = useCallback((event: YouTubeEvent<YouTubePlayer>) => {
     const state = event.data;
     console.log("Player state changed:", state, `(Current Index: ${currentSongIndex}, Queue Length: ${songQueue.length})`);
     if (state === YouTube.PlayerState.ENDED) {
@@ -496,7 +536,7 @@ export default function LiveRoomPage() {
     }
   }, [currentSongIndex, songQueue.length, handleRemoveSong, player, isPlaying, isLoadingVideo]); // Add dependencies
 
-  const onPlayerError: YouTubeProps['onError'] = useCallback((event) => {
+  const onPlayerError: YouTubeProps['onError'] = useCallback((event: YouTubeEvent<YouTubePlayer>) => {
     console.error(`YouTube Player Error (Code ${event.data}) for song at index ${currentSongIndex}`);
     const currentSongTitle = songQueue[currentSongIndex]?.title || "the current song";
     toast({
@@ -566,7 +606,9 @@ export default function LiveRoomPage() {
 
   // --- JSX ---
   return (
+    
     <div className="flex h-screen bg-background text-foreground overflow-hidden">
+      {/* <Suspense> */}
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col p-4 md:p-6 overflow-hidden"> {/* Ensure main area can handle overflow if needed */}
         <header className="flex justify-between items-center mb-4 flex-shrink-0">
@@ -876,6 +918,7 @@ export default function LiveRoomPage() {
         onOpenChange={setIsAddSongSheetOpen}
         onSongAdded={handleAddSong}
       />
+      {/* </Suspense> */}
     </div>
   );
 }

@@ -5,50 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1746217629711,
-      "tag": "0000_soft_vin_gonzales",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1746385342726,
-      "tag": "0001_wet_mulholland_black",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1746386831257,
-      "tag": "0002_superb_klaw",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1746389407271,
-      "tag": "0003_dark_mimic",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1746392065545,
-      "tag": "0004_shiny_purifiers",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1746392263590,
-      "tag": "0005_amused_adam_destine",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1746393345718,
-      "tag": "0006_heavy_gambit",
+      "when": 1746604318754,
+      "tag": "0000_ordinary_bushwacker",
       "breakpoints": true
     }
   ]

@@ -51,17 +51,27 @@ CREATE TABLE "verifications" (
 	"updated_at" timestamp
 );
 --> statement-breakpoint
+CREATE TABLE "songs" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"title" text NOT NULL,
+	"artist" text,
+	"video_id" text,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"stage_id" uuid NOT NULL
+);
+--> statement-breakpoint
 CREATE TABLE "stages" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"name" text NOT NULL,
+	"join_code" text NOT NULL,
 	"maxCapacity" integer DEFAULT 10,
-	"private" boolean DEFAULT false NOT NULL,
-	"terminated" boolean DEFAULT false NOT NULL,
+	"is_private" boolean DEFAULT false NOT NULL,
+	"is_terminated" boolean DEFAULT false NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	"user_id" text NOT NULL
+	CONSTRAINT "stages_join_code_unique" UNIQUE("join_code")
 );
 --> statement-breakpoint
 ALTER TABLE "accounts" ADD CONSTRAINT "accounts_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "stages" ADD CONSTRAINT "stages_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."users"("id") ON DELETE cascade ON UPDATE no action;
+ALTER TABLE "songs" ADD CONSTRAINT "songs_stage_id_stages_id_fk" FOREIGN KEY ("stage_id") REFERENCES "public"."stages"("id") ON DELETE cascade ON UPDATE no action;
