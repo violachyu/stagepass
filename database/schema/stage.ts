@@ -1,7 +1,5 @@
 import { boolean, integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core"
 
-import { users } from "./auth"
-import { relations } from "drizzle-orm"
 import { createSelectSchema, createInsertSchema } from "drizzle-zod"
 import { number, z } from "zod"
 
@@ -20,26 +18,6 @@ export const stages = pgTable("stages", {
     //    .references(() => users.id, { onDelete: "cascade" })
 })
 
-/*
-export const usersRelations = relations(users, ({ many }) => ({
-    stages: many(stages),
-}))
-
-export const stagesRelations = relations(stages, ({ one }) => ({
-    user: one(users, {
-        fields: [stages.adminUserId],
-        references: [users.id],
-    }),
-}))
-*/
-
-export const selectUserSchema = createSelectSchema(users);
-export type User = z.infer<typeof selectUserSchema>;
-
-// export const insertUserSchema = createInsertSchema(users, {
-//     name: (schema: z.ZodString) => schema.nonempty("Stage name cannot be empty"),
-// })
-
 export const selectStageSchema = createSelectSchema(stages);
 export type Stage = z.infer<typeof selectStageSchema>;
 
@@ -51,6 +29,5 @@ export const insertStageSchema = createInsertSchema(stages, {
 export type StageData = z.infer<typeof insertStageSchema>;
 
 export default {
-    users,
     stages
 };

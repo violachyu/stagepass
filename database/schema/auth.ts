@@ -1,4 +1,6 @@
-import { pgTable, text, timestamp, boolean, integer } from "drizzle-orm/pg-core";
+import { uuid, pgTable, text, timestamp, boolean, integer } from "drizzle-orm/pg-core";
+import { stages } from "./stage"
+import { relations } from "drizzle-orm"
 
 export const users = pgTable("users", {
     id: text('id').primaryKey(),
@@ -11,8 +13,21 @@ export const users = pgTable("users", {
     role: text('role'),
     banned: boolean('banned'),
     banReason: text('ban_reason'),
-    banExpires: timestamp('ban_expires')
+    banExpires: timestamp('ban_expires'),
+    stageId: uuid('stage_id').references(() => stages.id, { onDelete: 'set null' })
 });
+
+export const usersRelations = relations(users, ({ one }) => ({
+    stage: one(stages, {
+        fields: [users.stageId],
+        references: [stages.id],
+    }),
+}));
+
+export const stagesRelations = relations(stages, ({ many }) => ({
+    users: many(users),
+}));
+
 
 export const sessions = pgTable("sessions", {
     id: text('id').primaryKey(),
@@ -50,3 +65,7 @@ export const verifications = pgTable("verifications", {
     createdAt: timestamp('created_at'),
     updatedAt: timestamp('updated_at')
 });
+
+export default {
+    users
+};
