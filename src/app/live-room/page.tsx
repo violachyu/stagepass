@@ -122,7 +122,7 @@ function LiveRoomPage() {
         setRoomCode(joinCode);
         // Generate share URL
         const baseUrl = window.location.origin;
-        setShareUrl(`${baseUrl}/live-room?stageId=${stageId}&joinCode=${joinCode}`);
+        setShareUrl(`${baseUrl}/user?stageId=${stageId}&joinCode=${joinCode}`);
   
         
       } catch (error) {
